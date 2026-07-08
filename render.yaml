@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: hookah-menu
+    env: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MASTER_PIN
+        value: 2580
+      - key: GOOGLE_SHEET_ID
+        value: 1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o
+      - key: GOOGLE_SHEET_GID
+        value: 569579743
+      - key: GOOGLE_SHEET_NAME
+        value: Табаки
+      - key: GOOGLE_ACTIVE_MIXES_SHEET_NAME
+        value: Активные миксы
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
