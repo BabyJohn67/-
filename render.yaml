@@ -3,11 +3,13 @@ services:
     name: hookah-menu
     env: node
     plan: free
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
-    startCommand: pnpm run start
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 22
       - key: MASTER_PIN
         value: 2580
       - key: GOOGLE_SHEET_ID
