@@ -343,7 +343,7 @@ export default function App() {
   const [isMixLoading, setIsMixLoading] = useState(false);
   const [mixSaveMessage, setMixSaveMessage] = useState('');
   const [mixDraft, setMixDraft] = useState({
-    hookahId: '1',
+    hookahId: '',
     comment: '',
     tobaccos: []
   });
@@ -596,7 +596,8 @@ export default function App() {
     };
   }, [mixDraft.tobaccos.length, mixPercentTotal]);
 
-  const canSaveMix = mixDraft.tobaccos.length > 0 && mixPercentTotal === 100;
+  const isHookahSelected = hookahNumbers.includes(mixDraft.hookahId);
+  const canSaveMix = isHookahSelected && mixDraft.tobaccos.length > 0 && mixPercentTotal === 100;
 
   function toggleTasteCategory(categoryId) {
     setSelectedCategoryIds((current) =>
@@ -810,6 +811,11 @@ export default function App() {
     event.preventDefault();
     setMixSaveMessage('');
     setLastSavedMix(null);
+
+    if (!isHookahSelected) {
+      setMixSaveMessage('Сначала выберите физический кальян для этого микса.');
+      return;
+    }
 
     if (!canSaveMix) {
       setMixSaveMessage('Сумма процентов должна быть ровно 100%.');
@@ -1375,8 +1381,16 @@ export default function App() {
                   <span>Сумма: {mixPercentTotal}%</span>
                 </div>
 
-                <div className="hookah-number-picker" aria-label="Номер кальяна">
-                  <span>Номер кальяна</span>
+                <div className="hookah-number-picker" aria-label="Выберите кальян">
+                  <div className="hookah-number-heading">
+                    <div>
+                      <span className="eyebrow">Обязательный шаг</span>
+                      <h4>Выберите кальян</h4>
+                    </div>
+                    <p>
+                      Микс сохранится именно для выбранного физического кальяна и будет показан гостю по его QR-коду.
+                    </p>
+                  </div>
                   <div>
                     {hookahNumbers.map((hookahId) => (
                       <button
@@ -1385,10 +1399,15 @@ export default function App() {
                         type="button"
                         onClick={() => setMixDraft((current) => ({ ...current, hookahId }))}
                       >
-                        {hookahId}
+                        Кальян №{hookahId}
                       </button>
                     ))}
                   </div>
+                  {!isHookahSelected && (
+                    <strong className="hookah-required-note">
+                      Без выбора кальяна заказ сохранить нельзя.
+                    </strong>
+                  )}
                 </div>
 
                 <div className="mix-builder-grid">
