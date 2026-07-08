@@ -12,13 +12,24 @@ export async function loadTobaccos() {
 }
 
 export async function loadMasterPin() {
+  const config = await loadConfig();
+  return config.masterPin;
+}
+
+export async function loadConfig() {
   try {
     const response = await fetch('/api/config');
     if (!response.ok) throw new Error('Config is unavailable');
     const data = await response.json();
-    return data.masterPin || FALLBACK_MASTER_PIN;
+    return {
+      masterPin: data.masterPin || FALLBACK_MASTER_PIN,
+      publicSiteUrl: data.publicSiteUrl || ''
+    };
   } catch {
-    return FALLBACK_MASTER_PIN;
+    return {
+      masterPin: FALLBACK_MASTER_PIN,
+      publicSiteUrl: ''
+    };
   }
 }
 

@@ -110,7 +110,10 @@ function requireMasterPin(request, response, next) {
 }
 
 app.get('/api/config', (_request, response) => {
-  response.json({ masterPin: MASTER_PIN });
+  response.json({
+    masterPin: MASTER_PIN,
+    publicSiteUrl: process.env.PUBLIC_SITE_URL || ''
+  });
 });
 
 app.get('/api/hookahs/:hookahId/mix', (request, response) => {

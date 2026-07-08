@@ -20,6 +20,8 @@ services:
         value: Табаки
       - key: GOOGLE_ACTIVE_MIXES_SHEET_NAME
         value: Активные миксы
+      - key: PUBLIC_SITE_URL
+        value: https://hookah-menu-8cqq.onrender.com
       - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
         sync: false
       - key: GOOGLE_PRIVATE_KEY

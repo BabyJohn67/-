@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   BellRing,
   CalendarClock,
+  Copy,
+  ExternalLink,
   Heart,
   Lock,
   LogOut,
+  Plus,
   RefreshCcw,
   Search,
   Send,
@@ -21,7 +25,7 @@ import { fallbackTobaccos } from './data/fallbackTobaccos.js';
 import {
   addTobacco,
   loadActiveMix,
-  loadMasterPin,
+  loadConfig,
   loadTobaccos,
   saveActiveMix,
   saveTobaccoQuantity
@@ -32,6 +36,7 @@ const MASTER_SESSION_KEY = 'hookah-menu-master-enabled-v1';
 const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
+const HOOKAH_COUNT = 6;
 
 const TASTE_CATEGORIES = [
   {
@@ -338,13 +343,12 @@ export default function App() {
   const [isMixLoading, setIsMixLoading] = useState(false);
   const [mixSaveMessage, setMixSaveMessage] = useState('');
   const [mixDraft, setMixDraft] = useState({
-    hookahId: '',
+    hookahId: '1',
     comment: '',
-    tobaccos: [
-      { tobaccoId: '', percent: 50 },
-      { tobaccoId: '', percent: 50 }
-    ]
+    tobaccos: []
   });
+  const [mixSearch, setMixSearch] = useState('');
+  const [lastSavedMix, setLastSavedMix] = useState(null);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -363,6 +367,9 @@ export default function App() {
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [masterPin, setMasterPin] = useState('2580');
+  const [masterTab, setMasterTab] = useState('stock');
+  const [publicSiteUrl, setPublicSiteUrl] = useState('');
+  const [copiedLinkMessage, setCopiedLinkMessage] = useState('');
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -383,7 +390,10 @@ export default function App() {
 
   useEffect(() => {
     refreshTobaccos();
-    loadMasterPin().then(setMasterPin);
+    loadConfig().then((config) => {
+      setMasterPin(config.masterPin);
+      setPublicSiteUrl(config.publicSiteUrl);
+    });
   }, []);
 
   useEffect(() => {
@@ -532,10 +542,61 @@ export default function App() {
     );
   }, [masterFilteredTobaccos]);
 
+  const hookahNumbers = useMemo(
+    () => Array.from({ length: HOOKAH_COUNT }, (_, index) => String(index + 1)),
+    []
+  );
+
   const mixPercentTotal = useMemo(
     () => mixDraft.tobaccos.reduce((sum, item) => sum + Number(item.percent || 0), 0),
     [mixDraft.tobaccos]
   );
+
+  const selectedMixIds = useMemo(
+    () => new Set(mixDraft.tobaccos.map((item) => item.tobaccoId)),
+    [mixDraft.tobaccos]
+  );
+
+  const mixSearchResults = useMemo(() => {
+    const normalizedSearch = mixSearch.toLowerCase().trim();
+
+    return tobaccos
+      .filter((item) => {
+        if (selectedMixIds.has(item.id)) return false;
+        const brand = getBrand(item);
+        const matchesSearch =
+          !normalizedSearch ||
+          item.name.toLowerCase().includes(normalizedSearch) ||
+          item.taste.toLowerCase().includes(normalizedSearch) ||
+          brand.toLowerCase().includes(normalizedSearch);
+
+        return matchesSearch;
+      })
+      .slice(0, 8);
+  }, [mixSearch, selectedMixIds, tobaccos]);
+
+  const mixPercentState = useMemo(() => {
+    if (mixDraft.tobaccos.length === 0) {
+      return {
+        type: 'warning',
+        label: 'Добавьте табаки в микс'
+      };
+    }
+
+    if (mixPercentTotal === 100) {
+      return {
+        type: 'valid',
+        label: 'Пропорции заполнены корректно'
+      };
+    }
+
+    return {
+      type: 'warning',
+      label: mixPercentTotal < 100 ? 'Сумма меньше 100%' : 'Сумма больше 100%'
+    };
+  }, [mixDraft.tobaccos.length, mixPercentTotal]);
+
+  const canSaveMix = mixDraft.tobaccos.length > 0 && mixPercentTotal === 100;
 
   function toggleTasteCategory(categoryId) {
     setSelectedCategoryIds((current) =>
@@ -582,8 +643,28 @@ export default function App() {
     });
   }
 
-  function callMaster() {
-    const normalizedTableNumber = tableNumber.trim();
+  function getPublicOrigin() {
+    if (publicSiteUrl.trim()) return publicSiteUrl.trim().replace(/\/$/, '');
+    return window.location.origin.replace(/\/$/, '');
+  }
+
+  function getHookahUrl(hookahId) {
+    return `${getPublicOrigin()}/hookah/${hookahId}`;
+  }
+
+  async function copyHookahLink(hookahId) {
+    const link = getHookahUrl(hookahId);
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedLinkMessage(`Ссылка кальяна №${hookahId} скопирована`);
+    } catch {
+      setCopiedLinkMessage(link);
+    }
+  }
+
+  function callMaster(targetNumber = tableNumber.trim()) {
+    const normalizedTableNumber = String(targetNumber || '').trim();
 
     if (!normalizedTableNumber) {
       setCallMasterNotice('Укажите номер стола, чтобы мастер понял, куда подойти.');
@@ -680,16 +761,24 @@ export default function App() {
     setMixDraft((current) => ({
       ...current,
       tobaccos: current.tobaccos.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: field === 'percent' ? Math.max(0, Number(value || 0)) : value
+            }
+          : item
       )
     }));
   }
 
-  function addMixItem() {
+  function addMixItem(tobacco) {
     setMixDraft((current) => ({
       ...current,
-      tobaccos: [...current.tobaccos, { tobaccoId: '', percent: 0 }]
+      tobaccos: current.tobaccos.some((item) => item.tobaccoId === tobacco.id)
+        ? current.tobaccos
+        : [...current.tobaccos, { tobaccoId: tobacco.id, percent: 0 }]
     }));
+    setMixSearch('');
   }
 
   function removeMixItem(index) {
@@ -699,9 +788,33 @@ export default function App() {
     }));
   }
 
+  function distributeMixEvenly() {
+    setMixDraft((current) => {
+      const count = current.tobaccos.length;
+      if (count === 0) return current;
+
+      const basePercent = Math.floor(100 / count);
+      const remainder = 100 - basePercent * count;
+
+      return {
+        ...current,
+        tobaccos: current.tobaccos.map((item, index) => ({
+          ...item,
+          percent: basePercent + (index < remainder ? 1 : 0)
+        }))
+      };
+    });
+  }
+
   async function saveHookahMix(event) {
     event.preventDefault();
     setMixSaveMessage('');
+    setLastSavedMix(null);
+
+    if (!canSaveMix) {
+      setMixSaveMessage('Сумма процентов должна быть ровно 100%.');
+      return;
+    }
 
     const selectedTobaccos = mixDraft.tobaccos
       .map((item) => {
@@ -727,7 +840,8 @@ export default function App() {
         },
         masterPin
       );
-      setMixSaveMessage(`Микс для кальяна №${saved.hookahId} сохранен. QR-ссылка: /hookah/${saved.hookahId}`);
+      setLastSavedMix(saved);
+      setMixSaveMessage(`Заказ сохранён для кальяна №${saved.hookahId}`);
     } catch (saveError) {
       setMixSaveMessage(saveError.message || 'Не удалось сохранить микс');
     }
@@ -810,6 +924,22 @@ export default function App() {
                 </div>
               </>
             )}
+
+            <div className="hookah-call-master" id="call-master">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => callMaster(`Кальян ${hookahPageId}`)}
+              >
+                <BellRing size={18} />
+                Позвать мастера
+              </button>
+              {callMasterNotice && (
+                <div className="call-master-notice" role="status">
+                  {callMasterNotice}
+                </div>
+              )}
+            </div>
           </section>
         </section>
       </main>
@@ -1218,249 +1348,381 @@ export default function App() {
               </div>
             )}
 
-            <form className="master-mix-form" onSubmit={saveHookahMix}>
-              <div className="master-mix-heading">
-                <div>
-                  <span className="eyebrow">Активный микс</span>
-                  <h3>Создать микс для кальяна</h3>
-                </div>
-                <span>Сумма: {mixPercentTotal}%</span>
-              </div>
-
-              <label className="master-mix-hookah-field">
-                Номер кальяна
-                <input
-                  inputMode="numeric"
-                  placeholder="Например: 4"
-                  type="text"
-                  value={mixDraft.hookahId}
-                  onChange={(event) => setMixDraft((current) => ({ ...current, hookahId: event.target.value }))}
-                />
-              </label>
-
-              <div className="master-mix-items">
-                {mixDraft.tobaccos.map((item, index) => (
-                  <div className="master-mix-row" key={index}>
-                    <label>
-                      Табак
-                      <select
-                        value={item.tobaccoId}
-                        onChange={(event) => updateMixItem(index, 'tobaccoId', event.target.value)}
-                      >
-                        <option value="">Выберите табак</option>
-                        {tobaccos.map((tobacco) => (
-                          <option key={tobacco.id} value={tobacco.id}>
-                            {getBrand(tobacco)} - {tobacco.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label>
-                      %
-                      <input
-                        min="0"
-                        max="100"
-                        step="5"
-                        type="number"
-                        value={item.percent}
-                        onChange={(event) => updateMixItem(index, 'percent', Number(event.target.value || 0))}
-                      />
-                    </label>
-
-                    <button
-                      className="ghost-button"
-                      disabled={mixDraft.tobaccos.length <= 1}
-                      type="button"
-                      onClick={() => removeMixItem(index)}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <label className="master-mix-comment">
-                Комментарий мастера
-                <textarea
-                  placeholder="Например: сладкий ягодный микс без холодка"
-                  value={mixDraft.comment}
-                  onChange={(event) => setMixDraft((current) => ({ ...current, comment: event.target.value }))}
-                />
-              </label>
-
-              <div className="master-mix-actions">
-                <button className="ghost-button" type="button" onClick={addMixItem}>
-                  Добавить табак
+            <div className="master-tabs" role="tablist" aria-label="Разделы панели мастера">
+              {[
+                ['stock', 'Остатки'],
+                ['order', 'Создать заказ'],
+                ['qr', 'QR кальянов']
+              ].map(([value, label]) => (
+                <button
+                  className={masterTab === value ? 'is-active' : ''}
+                  key={value}
+                  type="button"
+                  onClick={() => setMasterTab(value)}
+                >
+                  {label}
                 </button>
-                <button className="primary-button" type="submit">
-                  Сохранить активный микс
-                </button>
-              </div>
-
-              {mixSaveMessage && (
-                <div className="master-save-message" role="status">
-                  {mixSaveMessage}
-                </div>
-              )}
-            </form>
-
-            <form className="master-add-form" onSubmit={addNewTobacco}>
-              <div>
-                <span className="eyebrow">Новая позиция</span>
-                <h3>Добавить табак</h3>
-              </div>
-
-              <label>
-                Наименование
-                <input
-                  type="text"
-                  placeholder="Например: Darkside Mango Lassi"
-                  value={newTobacco.name}
-                  onChange={(event) => setNewTobacco((current) => ({ ...current, name: event.target.value }))}
-                />
-              </label>
-
-              <label>
-                Кол-во
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={newTobacco.quantity}
-                  onChange={(event) => setNewTobacco((current) => ({ ...current, quantity: Number(event.target.value || 0) }))}
-                />
-              </label>
-
-              <label>
-                Перевод / вкус
-                <input
-                  type="text"
-                  placeholder="Например: манго, йогурт, специи"
-                  value={newTobacco.taste}
-                  onChange={(event) => setNewTobacco((current) => ({ ...current, taste: event.target.value }))}
-                />
-              </label>
-
-              <button className="primary-button" type="submit">
-                Добавить в таблицу
-              </button>
-            </form>
-
-            <div className="master-stat-grid" aria-label="Статистика табаков">
-              <div className="master-stat-card">
-                <span>Всего позиций</span>
-                <strong>{masterStats.total}</strong>
-              </div>
-              <div className="master-stat-card">
-                <span>В наличии</span>
-                <strong>{masterStats.available}</strong>
-              </div>
-              <div className="master-stat-card">
-                <span>Заканчивается</span>
-                <strong>{masterStats.low}</strong>
-              </div>
-              <div className="master-stat-card">
-                <span>Нет в наличии</span>
-                <strong>{masterStats.empty}</strong>
-              </div>
-              <div className="master-stat-card is-wide">
-                <span>Общий примерный вес</span>
-                <strong>примерно {masterStats.grams} г</strong>
-              </div>
-            </div>
-
-            <div className="master-tools">
-              <div className="master-filter-buttons" aria-label="Быстрые фильтры мастера">
-                {[
-                  ['all', 'Все'],
-                  ['available', 'В наличии'],
-                  ['low', 'Заканчивается'],
-                  ['empty', 'Нет в наличии']
-                ].map(([value, label]) => (
-                  <button
-                    className={masterStatusFilter === value ? 'is-active' : ''}
-                    key={value}
-                    type="button"
-                    onClick={() => setMasterStatusFilter(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <label className="master-problem-toggle">
-                <input
-                  type="checkbox"
-                  checked={masterOnlyProblems}
-                  onChange={(event) => setMasterOnlyProblems(event.target.checked)}
-                />
-                Только проблемные
-              </label>
-            </div>
-
-            <label className="master-search-box">
-              <Search size={20} />
-              <input
-                type="search"
-                placeholder="Найти табак, вкус или бренд"
-                value={masterSearch}
-                onChange={(event) => setMasterSearch(event.target.value)}
-              />
-            </label>
-
-            <div className="master-inventory-list">
-              {masterGroupedTobaccos.map((group) => (
-                <section className="master-brand-group" key={group.brand}>
-                  <div className="master-brand-heading">
-                    <h3>{group.brand}</h3>
-                    <span>{group.items.length} поз.</span>
-                  </div>
-
-                  <div className="master-row-list">
-                    {group.items.map((item) => {
-                      const status = getMasterStockStatus(item);
-                      return (
-                        <article className={`master-inventory-row stock-${status.type}`} key={item.id}>
-                          <div className="master-row-main">
-                            <span className="master-row-status">{status.label}</span>
-                            <strong>{item.name}</strong>
-                            <small>{item.taste}</small>
-                          </div>
-
-                          <div className="master-row-controls">
-                            <span>{formatGrams(item.quantity)} г</span>
-                            <label>
-                              Кол-во
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={item.quantity}
-                                onChange={(event) => updateDraftQuantity(item.id, Number(event.target.value || 0))}
-                              />
-                            </label>
-                            <button
-                              className="ghost-button"
-                              disabled={savingIds.includes(item.id)}
-                              type="button"
-                              onClick={() => saveQuantityToSheet(item)}
-                            >
-                              {savingIds.includes(item.id) ? 'Сохраняю' : 'Сохранить'}
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </section>
               ))}
             </div>
 
-            {masterFilteredTobaccos.length === 0 && (
-              <div className="empty-state">
-                По фильтрам мастера ничего не найдено.
+            {masterTab === 'order' && (
+              <form className="master-mix-form" onSubmit={saveHookahMix}>
+                <div className="master-mix-heading">
+                  <div>
+                    <span className="eyebrow">Активный микс</span>
+                    <h3>Создать заказ</h3>
+                  </div>
+                  <span>Сумма: {mixPercentTotal}%</span>
+                </div>
+
+                <div className="hookah-number-picker" aria-label="Номер кальяна">
+                  <span>Номер кальяна</span>
+                  <div>
+                    {hookahNumbers.map((hookahId) => (
+                      <button
+                        className={mixDraft.hookahId === hookahId ? 'is-active' : ''}
+                        key={hookahId}
+                        type="button"
+                        onClick={() => setMixDraft((current) => ({ ...current, hookahId }))}
+                      >
+                        {hookahId}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mix-builder-grid">
+                  <section className="mix-picker-panel" aria-label="Выбор табаков для микса">
+                    <label className="master-search-box mix-search-box">
+                      <Search size={20} />
+                      <input
+                        type="search"
+                        placeholder="Найти табак, вкус или бренд"
+                        value={mixSearch}
+                        onChange={(event) => setMixSearch(event.target.value)}
+                      />
+                    </label>
+
+                    <div className="mix-search-results">
+                      {mixSearchResults.map((tobacco) => (
+                        <button
+                          className="mix-search-result"
+                          key={tobacco.id}
+                          type="button"
+                          onClick={() => addMixItem(tobacco)}
+                        >
+                          <Plus size={16} />
+                          <span>
+                            <strong>{getBrand(tobacco)} {tobacco.name}</strong>
+                            <small>{tobacco.taste}</small>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="selected-mix-panel" aria-label="Табаки в миксе">
+                    <div className="selected-mix-heading">
+                      <div>
+                        <span className="eyebrow">Табаки в миксе</span>
+                        <h4>Выбранные позиции</h4>
+                      </div>
+                      <button
+                        className="ghost-button"
+                        disabled={mixDraft.tobaccos.length === 0}
+                        type="button"
+                        onClick={distributeMixEvenly}
+                      >
+                        Распределить поровну
+                      </button>
+                    </div>
+
+                    <div className="selected-mix-list">
+                      {mixDraft.tobaccos.length === 0 ? (
+                        <div className="empty-state">Добавьте табаки из списка слева.</div>
+                      ) : (
+                        mixDraft.tobaccos.map((item, index) => {
+                          const tobacco = tobaccos.find((current) => current.id === item.tobaccoId);
+
+                          return (
+                            <article className="selected-mix-row" key={item.tobaccoId}>
+                              <div>
+                                <strong>{tobacco ? `${getBrand(tobacco)} ${tobacco.name}` : 'Табак не найден'}</strong>
+                                <small>{tobacco?.taste || 'Проверьте список табаков'}</small>
+                              </div>
+                              <label>
+                                %
+                                <input
+                                  min="0"
+                                  max="100"
+                                  step="1"
+                                  type="number"
+                                  value={item.percent}
+                                  onChange={(event) => updateMixItem(index, 'percent', event.target.value)}
+                                />
+                              </label>
+                              <button
+                                className="ghost-button"
+                                type="button"
+                                aria-label="Удалить из микса"
+                                onClick={() => removeMixItem(index)}
+                              >
+                                <X size={16} />
+                              </button>
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+                </div>
+
+                <div className={`mix-total-card is-${mixPercentState.type}`}>
+                  <strong>Сумма: {mixPercentTotal}%</strong>
+                  <span>{mixPercentState.label}</span>
+                </div>
+
+                <label className="master-mix-comment">
+                  Комментарий мастера
+                  <textarea
+                    placeholder="Например: сладкий ягодный микс без холодка"
+                    value={mixDraft.comment}
+                    onChange={(event) => setMixDraft((current) => ({ ...current, comment: event.target.value }))}
+                  />
+                </label>
+
+                <div className="master-mix-actions">
+                  <button className="primary-button" disabled={!canSaveMix} type="submit">
+                    Сохранить заказ
+                  </button>
+                </div>
+
+                {mixSaveMessage && (
+                  <div className="master-save-message" role="status">
+                    {mixSaveMessage}
+                  </div>
+                )}
+
+                {lastSavedMix && (
+                  <div className="order-success-actions">
+                    <a className="ghost-button" href={`/hookah/${lastSavedMix.hookahId}`} target="_blank" rel="noreferrer">
+                      <ExternalLink size={17} />
+                      Открыть страницу гостя
+                    </a>
+                    <button className="ghost-button" type="button" onClick={() => copyHookahLink(lastSavedMix.hookahId)}>
+                      <Copy size={17} />
+                      Скопировать ссылку
+                    </button>
+                  </div>
+                )}
+              </form>
+            )}
+
+            {masterTab === 'qr' && (
+              <section className="qr-panel" aria-label="QR кальянов">
+                <div className="master-mix-heading">
+                  <div>
+                    <span className="eyebrow">Постоянные QR</span>
+                    <h3>QR кальянов</h3>
+                  </div>
+                </div>
+
+                <div className="qr-hookah-grid">
+                  {hookahNumbers.map((hookahId) => (
+                    <article className="qr-hookah-card" key={hookahId}>
+                      <h4>Кальян №{hookahId}</h4>
+                      <div className="qr-code-box">
+                        <QRCodeSVG
+                          value={getHookahUrl(hookahId)}
+                          size={190}
+                          bgColor="#fffaf0"
+                          fgColor="#15120d"
+                          level="M"
+                        />
+                      </div>
+                      <span className="qr-link">{getHookahUrl(hookahId)}</span>
+                      <div className="qr-card-actions">
+                        <a className="ghost-button" href={`/hookah/${hookahId}`} target="_blank" rel="noreferrer">
+                          <ExternalLink size={17} />
+                          Открыть
+                        </a>
+                        <button className="ghost-button" type="button" onClick={() => copyHookahLink(hookahId)}>
+                          <Copy size={17} />
+                          Скопировать ссылку
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {copiedLinkMessage && (
+              <div className="master-save-message" role="status">
+                {copiedLinkMessage}
               </div>
+            )}
+
+            {masterTab === 'stock' && (
+              <>
+                <form className="master-add-form" onSubmit={addNewTobacco}>
+                  <div>
+                    <span className="eyebrow">Новая позиция</span>
+                    <h3>Добавить табак</h3>
+                  </div>
+
+                  <label>
+                    Наименование
+                    <input
+                      type="text"
+                      placeholder="Например: Darkside Mango Lassi"
+                      value={newTobacco.name}
+                      onChange={(event) => setNewTobacco((current) => ({ ...current, name: event.target.value }))}
+                    />
+                  </label>
+
+                  <label>
+                    Кол-во
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={newTobacco.quantity}
+                      onChange={(event) => setNewTobacco((current) => ({ ...current, quantity: Number(event.target.value || 0) }))}
+                    />
+                  </label>
+
+                  <label>
+                    Перевод / вкус
+                    <input
+                      type="text"
+                      placeholder="Например: манго, йогурт, специи"
+                      value={newTobacco.taste}
+                      onChange={(event) => setNewTobacco((current) => ({ ...current, taste: event.target.value }))}
+                    />
+                  </label>
+
+                  <button className="primary-button" type="submit">
+                    Добавить в таблицу
+                  </button>
+                </form>
+
+                <div className="master-stat-grid" aria-label="Статистика табаков">
+                  <div className="master-stat-card">
+                    <span>Всего позиций</span>
+                    <strong>{masterStats.total}</strong>
+                  </div>
+                  <div className="master-stat-card">
+                    <span>В наличии</span>
+                    <strong>{masterStats.available}</strong>
+                  </div>
+                  <div className="master-stat-card">
+                    <span>Заканчивается</span>
+                    <strong>{masterStats.low}</strong>
+                  </div>
+                  <div className="master-stat-card">
+                    <span>Нет в наличии</span>
+                    <strong>{masterStats.empty}</strong>
+                  </div>
+                  <div className="master-stat-card is-wide">
+                    <span>Общий примерный вес</span>
+                    <strong>примерно {masterStats.grams} г</strong>
+                  </div>
+                </div>
+
+                <div className="master-tools">
+                  <div className="master-filter-buttons" aria-label="Быстрые фильтры мастера">
+                    {[
+                      ['all', 'Все'],
+                      ['available', 'В наличии'],
+                      ['low', 'Заканчивается'],
+                      ['empty', 'Нет в наличии']
+                    ].map(([value, label]) => (
+                      <button
+                        className={masterStatusFilter === value ? 'is-active' : ''}
+                        key={value}
+                        type="button"
+                        onClick={() => setMasterStatusFilter(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className="master-problem-toggle">
+                    <input
+                      type="checkbox"
+                      checked={masterOnlyProblems}
+                      onChange={(event) => setMasterOnlyProblems(event.target.checked)}
+                    />
+                    Только проблемные
+                  </label>
+                </div>
+
+                <label className="master-search-box">
+                  <Search size={20} />
+                  <input
+                    type="search"
+                    placeholder="Найти табак, вкус или бренд"
+                    value={masterSearch}
+                    onChange={(event) => setMasterSearch(event.target.value)}
+                  />
+                </label>
+
+                <div className="master-inventory-list">
+                  {masterGroupedTobaccos.map((group) => (
+                    <section className="master-brand-group" key={group.brand}>
+                      <div className="master-brand-heading">
+                        <h3>{group.brand}</h3>
+                        <span>{group.items.length} поз.</span>
+                      </div>
+
+                      <div className="master-row-list">
+                        {group.items.map((item) => {
+                          const status = getMasterStockStatus(item);
+                          return (
+                            <article className={`master-inventory-row stock-${status.type}`} key={item.id}>
+                              <div className="master-row-main">
+                                <span className="master-row-status">{status.label}</span>
+                                <strong>{item.name}</strong>
+                                <small>{item.taste}</small>
+                              </div>
+
+                              <div className="master-row-controls">
+                                <span>{formatGrams(item.quantity)} г</span>
+                                <label>
+                                  Кол-во
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={item.quantity}
+                                    onChange={(event) => updateDraftQuantity(item.id, Number(event.target.value || 0))}
+                                  />
+                                </label>
+                                <button
+                                  className="ghost-button"
+                                  disabled={savingIds.includes(item.id)}
+                                  type="button"
+                                  onClick={() => saveQuantityToSheet(item)}
+                                >
+                                  {savingIds.includes(item.id) ? 'Сохраняю' : 'Сохранить'}
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+
+                {masterFilteredTobaccos.length === 0 && (
+                  <div className="empty-state">
+                    По фильтрам мастера ничего не найдено.
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

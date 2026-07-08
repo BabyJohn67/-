@@ -16,6 +16,7 @@
     "express": "latest",
     "googleapis": "^173.0.0",
     "lucide-react": "latest",
+    "qrcode.react": "^4.2.0",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
