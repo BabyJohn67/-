@@ -773,7 +773,7 @@ export default function App() {
         itemIndex === index
           ? {
               ...item,
-              [field]: field === 'percent' ? Math.max(0, Number(value || 0)) : value
+              [field]: field === 'percent' && value !== '' ? Math.max(0, Number(value)) : value
             }
           : item
       )
@@ -802,14 +802,15 @@ export default function App() {
       const count = current.tobaccos.length;
       if (count === 0) return current;
 
-      const basePercent = Math.floor(100 / count);
-      const remainder = 100 - basePercent * count;
+      const totalSteps = 20;
+      const baseSteps = Math.floor(totalSteps / count);
+      const remainder = totalSteps - baseSteps * count;
 
       return {
         ...current,
         tobaccos: current.tobaccos.map((item, index) => ({
           ...item,
-          percent: basePercent + (index < remainder ? 1 : 0)
+          percent: (baseSteps + (index < remainder ? 1 : 0)) * 5
         }))
       };
     });
@@ -1551,9 +1552,10 @@ export default function App() {
                               <label>
                                 %
                                 <input
+                                  inputMode="numeric"
                                   min="0"
                                   max="100"
-                                  step="1"
+                                  step="5"
                                   type="number"
                                   value={item.percent}
                                   onChange={(event) => updateMixItem(index, 'percent', event.target.value)}
