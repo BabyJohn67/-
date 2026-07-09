@@ -596,6 +596,7 @@ export default function App() {
     () => mixDraft.tobaccos.reduce((sum, item) => sum + Number(item.percent || 0), 0),
     [mixDraft.tobaccos]
   );
+  const isMixPercentComplete = Math.abs(mixPercentTotal - 100) <= 0.001;
 
   const selectedMixIds = useMemo(
     () => new Set(mixDraft.tobaccos.map((item) => item.tobaccoId)),
@@ -628,7 +629,7 @@ export default function App() {
       };
     }
 
-    if (mixPercentTotal === 100) {
+    if (isMixPercentComplete) {
       return {
         type: 'valid',
         label: 'Пропорции заполнены корректно'
@@ -639,10 +640,10 @@ export default function App() {
       type: 'warning',
       label: mixPercentTotal < 100 ? 'Сумма меньше 100%' : 'Сумма больше 100%'
     };
-  }, [mixDraft.tobaccos.length, mixPercentTotal]);
+  }, [isMixPercentComplete, mixDraft.tobaccos.length, mixPercentTotal]);
 
   const isHookahSelected = hookahNumbers.includes(mixDraft.hookahId);
-  const canSaveMix = isHookahSelected && mixDraft.tobaccos.length > 0 && mixPercentTotal === 100;
+  const canSaveMix = isHookahSelected && mixDraft.tobaccos.length > 0 && isMixPercentComplete;
 
   function toggleTasteCategory(categoryId) {
     setSelectedCategoryIds((current) =>
@@ -973,8 +974,13 @@ export default function App() {
       return;
     }
 
+    if (mixDraft.tobaccos.length === 0) {
+      setMixSaveMessage('Добавьте хотя бы один табак в микс.');
+      return;
+    }
+
     if (!canSaveMix) {
-      setMixSaveMessage('Сумма процентов должна быть ровно 100%.');
+      setMixSaveMessage(`Сумма процентов должна быть ровно 100%. Сейчас: ${mixPercentTotal}%.`);
       return;
     }
 
@@ -1928,7 +1934,11 @@ export default function App() {
                 </label>
 
                 <div className="master-mix-actions">
-                  <button className="primary-button" disabled={!canSaveMix} type="submit">
+                  <button
+                    className="primary-button"
+                    title={canSaveMix ? 'Сохранить заказ' : 'Нажмите, чтобы увидеть что нужно исправить'}
+                    type="submit"
+                  >
                     Сохранить заказ
                   </button>
                 </div>
