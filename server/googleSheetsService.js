@@ -14,6 +14,10 @@ function getSheetName() {
   return process.env.GOOGLE_SHEET_NAME || DEFAULT_SHEET_NAME;
 }
 
+function getSheetGid() {
+  return Number(process.env.GOOGLE_SHEET_GID || 569579743);
+}
+
 function getActiveMixesSheetName() {
   return process.env.GOOGLE_ACTIVE_MIXES_SHEET_NAME || DEFAULT_ACTIVE_MIXES_SHEET_NAME;
 }
@@ -309,9 +313,29 @@ export function rowsToTobaccos(rows) {
 
 async function getSheetRows() {
   const sheets = getSheetsClient();
+  let targetSheetName = getSheetName();
+
+  try {
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: getSheetId(),
+      range: `${targetSheetName}!A:Z`
+    });
+
+    return result.data.values || [];
+  } catch (error) {
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: getSheetId()
+    });
+    const tabs = spreadsheet.data.sheets || [];
+    const gidMatch = tabs.find((sheet) => Number(sheet.properties?.sheetId) === getSheetGid());
+    const firstGrid = tabs.find((sheet) => sheet.properties?.sheetType === 'GRID');
+
+    targetSheetName = gidMatch?.properties?.title || firstGrid?.properties?.title || targetSheetName;
+  }
+
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
-    range: `${getSheetName()}!A:Z`
+    range: `${targetSheetName}!A:Z`
   });
 
   return result.data.values || [];

@@ -17,7 +17,7 @@ services:
       - key: GOOGLE_SHEET_GID
         value: 569579743
       - key: GOOGLE_SHEET_NAME
-        value: Табаки
+        value: Наличие табаков
       - key: GOOGLE_ACTIVE_MIXES_SHEET_NAME
         value: Активные миксы
       - key: PUBLIC_SITE_URL
