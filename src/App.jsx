@@ -780,6 +780,66 @@ export default function App() {
     }));
   }
 
+  function updateMixPercent(index, value) {
+    const rawValue = String(value);
+
+    if (rawValue === '') {
+      updateMixItem(index, 'percent', '');
+      return;
+    }
+
+    const withoutLeadingZero = rawValue.replace(/^0+(?=\d)/, '');
+    const numericValue = Number(withoutLeadingZero);
+
+    if (!Number.isFinite(numericValue)) return;
+
+    updateMixItem(index, 'percent', Math.min(100, Math.max(0, numericValue)));
+  }
+
+  function clearZeroMixPercent(index) {
+    setMixDraft((current) => ({
+      ...current,
+      tobaccos: current.tobaccos.map((item, itemIndex) =>
+        itemIndex === index && Number(item.percent || 0) === 0 ? { ...item, percent: '' } : item
+      )
+    }));
+  }
+
+  function commitMixPercent(index) {
+    setMixDraft((current) => ({
+      ...current,
+      tobaccos: current.tobaccos.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        if (item.percent === '') return item;
+
+        const numericValue = Math.min(100, Math.max(0, Number(item.percent || 0)));
+        const roundedToFive = Math.round(numericValue / 5) * 5;
+
+        return {
+          ...item,
+          percent: roundedToFive
+        };
+      })
+    }));
+  }
+
+  function stepMixPercent(index, direction) {
+    setMixDraft((current) => ({
+      ...current,
+      tobaccos: current.tobaccos.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        const currentPercent = Number(item.percent || 0);
+        const nextPercent = Math.min(100, Math.max(0, currentPercent + direction * 5));
+
+        return {
+          ...item,
+          percent: nextPercent
+        };
+      })
+    }));
+  }
+
   function addMixItem(tobacco) {
     setMixDraft((current) => ({
       ...current,
@@ -1558,7 +1618,20 @@ export default function App() {
                                   step="5"
                                   type="number"
                                   value={item.percent}
-                                  onChange={(event) => updateMixItem(index, 'percent', event.target.value)}
+                                  onFocus={() => clearZeroMixPercent(index)}
+                                  onChange={(event) => updateMixPercent(index, event.target.value)}
+                                  onBlur={() => commitMixPercent(index)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'ArrowUp') {
+                                      event.preventDefault();
+                                      stepMixPercent(index, 1);
+                                    }
+
+                                    if (event.key === 'ArrowDown') {
+                                      event.preventDefault();
+                                      stepMixPercent(index, -1);
+                                    }
+                                  }}
                                 />
                               </label>
                               <button
