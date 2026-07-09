@@ -93,6 +93,11 @@ main {
   font-size: 14px;
 }
 
+.nav-auth {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .nav-links a {
   min-height: 40px;
   display: inline-flex;
@@ -104,6 +109,22 @@ main {
 .nav-links a:hover {
   color: #fff5dd;
   background: rgba(255, 255, 255, 0.06);
+}
+
+.login-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(242, 207, 131, 0.32);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #171007;
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+  box-shadow: 0 14px 34px rgba(217, 170, 69, 0.18);
+  cursor: pointer;
+  font-weight: 900;
 }
 
 .hero {
@@ -163,15 +184,6 @@ h1 {
   text-align: center;
 }
 
-.master-mini-link {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 8px;
-  color: var(--muted);
-  font-weight: 800;
-}
-
 .call-master-hero-button {
   min-height: 48px;
   display: inline-flex;
@@ -217,6 +229,95 @@ h1 {
   color: #f7ebd1;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--line);
+}
+
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(9, 8, 6, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.auth-modal {
+  width: min(460px, 100%);
+  border: 1px solid rgba(242, 207, 131, 0.24);
+  border-radius: 8px;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(31, 26, 18, 0.98), rgba(16, 13, 9, 0.98)),
+    var(--panel);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
+}
+
+.auth-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.auth-modal-header h2 {
+  margin-top: 5px;
+  color: #fff6e4;
+  font-size: 28px;
+}
+
+.auth-close-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #f7ebd1;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #fff6e4;
+  background: rgba(255, 255, 255, 0.06);
+  outline: 0;
+}
+
+.auth-form input:focus {
+  border-color: rgba(242, 207, 131, 0.52);
+  box-shadow: 0 0 0 3px rgba(217, 170, 69, 0.12);
+}
+
+.login-error {
+  color: var(--danger);
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .status-panel {
@@ -995,8 +1096,7 @@ h2 {
   font-size: 13px;
 }
 
-.master-controls input[type="number"],
-.master-login input {
+.master-controls input[type="number"] {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--line);
@@ -1024,7 +1124,6 @@ h2 {
 }
 
 .empty-state,
-.master-login,
 .master-panel,
 .save-note {
   border: 1px solid var(--line);
@@ -1036,25 +1135,6 @@ h2 {
   padding: 24px;
   color: var(--muted);
   text-align: center;
-}
-
-.master-login {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 14px;
-  padding: 18px;
-}
-
-.master-login label {
-  display: grid;
-  gap: 7px;
-  color: var(--muted);
-}
-
-.pin-error {
-  grid-column: 2 / -1;
-  color: var(--danger);
 }
 
 .master-panel {
@@ -1783,12 +1863,21 @@ h2 {
 
   .nav {
     align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .nav-links {
     flex-direction: column;
     align-items: flex-end;
     gap: 2px;
+  }
+
+  .nav-auth {
+    margin-left: auto;
+  }
+
+  .login-button {
+    min-width: 104px;
   }
 
   h1 {
@@ -1804,11 +1893,6 @@ h2 {
   .ghost-button,
   .call-master-hero-button {
     width: 100%;
-  }
-
-  .master-mini-link {
-    width: 100%;
-    justify-content: center;
   }
 
   .tobacco-grid {
@@ -1850,20 +1934,14 @@ h2 {
   .send-options .primary-button,
   .send-options .ghost-button,
   .choice-send-row .ghost-button,
-  .call-master-controls .primary-button {
+  .call-master-controls .primary-button,
+  .auth-actions .primary-button,
+  .auth-actions .ghost-button {
     width: 100%;
   }
 
   .call-master-controls {
     grid-template-columns: 1fr;
-  }
-
-  .master-login {
-    grid-template-columns: 1fr;
-  }
-
-  .pin-error {
-    grid-column: auto;
   }
 
   .master-stat-grid {

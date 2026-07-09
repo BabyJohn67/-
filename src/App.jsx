@@ -37,6 +37,7 @@ const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
 const HOOKAH_COUNT = 6;
+const MASTER_LOGIN = 'master';
 
 const TASTE_CATEGORIES = [
   {
@@ -364,8 +365,12 @@ export default function App() {
     quantity: 1,
     taste: ''
   });
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState('');
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [masterCredentials, setMasterCredentials] = useState({
+    login: '',
+    password: ''
+  });
+  const [loginError, setLoginError] = useState('');
   const [masterPin, setMasterPin] = useState('2580');
   const [masterTab, setMasterTab] = useState('stock');
   const [publicSiteUrl, setPublicSiteUrl] = useState('');
@@ -695,21 +700,24 @@ export default function App() {
 
   function loginAsMaster(event) {
     event.preventDefault();
-    if (pin === masterPin) {
+    const normalizedLogin = masterCredentials.login.trim().toLowerCase();
+
+    if (normalizedLogin === MASTER_LOGIN && masterCredentials.password === masterPin) {
       setIsMaster(true);
       setOnlyAvailable(false);
-      setPin('');
-      setPinError('');
+      setIsLoginOpen(false);
+      setMasterCredentials({ login: '', password: '' });
+      setLoginError('');
       return;
     }
 
-    setPinError('PIN не подошел. Проверьте цифры и попробуйте еще раз.');
+    setLoginError('Логин или пароль не подошли. Проверьте данные и попробуйте еще раз.');
   }
 
   function logoutMaster() {
     setIsMaster(false);
-    setPin('');
-    setPinError('');
+    setMasterCredentials({ login: '', password: '' });
+    setLoginError('');
   }
 
   function updateDraftQuantity(id, quantity) {
@@ -966,7 +974,19 @@ export default function App() {
           <div className="nav-links">
             <a href="#taste-builder">Подбор</a>
             <a href="#all-tobaccos">Все табаки</a>
-            <a href="#master">Для мастера</a>
+          </div>
+          <div className="nav-auth">
+            {isMaster ? (
+              <a className="login-button" href="#master">
+                <ShieldCheck size={17} />
+                Панель
+              </a>
+            ) : (
+              <button className="login-button" type="button" onClick={() => setIsLoginOpen(true)}>
+                <Lock size={17} />
+                Войти
+              </button>
+            )}
           </div>
         </nav>
 
@@ -984,7 +1004,6 @@ export default function App() {
                   Позвать мастера
                 </button>
               )}
-              <a className="master-mini-link" href="#master">Для мастера</a>
             </div>
           </div>
 
@@ -995,6 +1014,76 @@ export default function App() {
           </aside>
         </section>
       </header>
+
+      {isLoginOpen && (
+        <div className="auth-modal-backdrop" role="presentation">
+          <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+            <div className="auth-modal-header">
+              <div>
+                <span className="eyebrow">Вход / регистрация</span>
+                <h2 id="auth-modal-title">Вход для персонала</h2>
+              </div>
+              <button
+                className="auth-close-button"
+                type="button"
+                aria-label="Закрыть вход"
+                onClick={() => {
+                  setIsLoginOpen(false);
+                  setLoginError('');
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form className="auth-form" onSubmit={loginAsMaster}>
+              <label>
+                Логин
+                <input
+                  autoComplete="username"
+                  placeholder="master"
+                  type="text"
+                  value={masterCredentials.login}
+                  onChange={(event) =>
+                    setMasterCredentials((current) => ({ ...current, login: event.target.value }))
+                  }
+                />
+              </label>
+
+              <label>
+                Пароль
+                <input
+                  autoComplete="current-password"
+                  placeholder="Введите пароль"
+                  type="password"
+                  value={masterCredentials.password}
+                  onChange={(event) =>
+                    setMasterCredentials((current) => ({ ...current, password: event.target.value }))
+                  }
+                />
+              </label>
+
+              {loginError && <span className="login-error">{loginError}</span>}
+
+              <div className="auth-actions">
+                <button className="primary-button" type="submit">
+                  Войти
+                </button>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => {
+                    setIsLoginOpen(false);
+                    setLoginError('');
+                  }}
+                >
+                  Закрыть
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       <section className="guest-flow-section" id="taste-builder">
         <div className="section-heading">
@@ -1298,31 +1387,15 @@ export default function App() {
         )}
       </section>
 
-      <section className="master-section" id="master">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">Доступ персонала</span>
-            <h2>Вход для мастера</h2>
+      {isMaster && (
+        <section className="master-section" id="master">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Доступ персонала</span>
+              <h2>Панель мастера</h2>
+            </div>
           </div>
-        </div>
 
-        {!isMaster ? (
-          <form className="master-login" onSubmit={loginAsMaster}>
-            <Lock size={22} />
-            <label>
-              PIN-код
-              <input
-                inputMode="numeric"
-                type="password"
-                placeholder="Введите PIN"
-                value={pin}
-                onChange={(event) => setPin(event.target.value)}
-              />
-            </label>
-            <button className="primary-button" type="submit">Войти</button>
-            {pinError && <span className="pin-error">{pinError}</span>}
-          </form>
-        ) : (
           <div className="master-panel">
             <div className="master-panel-header">
               <div>
@@ -1744,8 +1817,8 @@ export default function App() {
               </>
             )}
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   );
 }
