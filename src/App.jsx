@@ -24,6 +24,7 @@ import { GRAMS_PER_UNIT } from './config.js';
 import { fallbackTobaccos } from './data/fallbackTobaccos.js';
 import {
   addTobacco,
+  clearActiveMix,
   loadActiveMix,
   loadConfig,
   loadTobaccos,
@@ -378,6 +379,7 @@ export default function App() {
   const [activeHookahMixes, setActiveHookahMixes] = useState({});
   const [isActiveHookahsLoading, setIsActiveHookahsLoading] = useState(false);
   const [activeHookahsError, setActiveHookahsError] = useState('');
+  const [clearingHookahIds, setClearingHookahIds] = useState([]);
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -883,6 +885,34 @@ export default function App() {
     setMixSaveMessage('');
     setLastSavedMix(null);
     setMasterTab('order');
+  }
+
+  async function clearHookahMix(hookahId) {
+    setActiveHookahsError('');
+    setClearingHookahIds((current) => [...new Set([...current, hookahId])]);
+
+    try {
+      await clearActiveMix(hookahId, masterPin);
+      setActiveHookahMixes((current) => ({
+        ...current,
+        [hookahId]: null
+      }));
+      if (lastSavedMix?.hookahId === hookahId) {
+        setLastSavedMix(null);
+      }
+      if (mixDraft.hookahId === hookahId) {
+        setMixDraft((current) => ({
+          ...current,
+          comment: '',
+          tobaccos: []
+        }));
+      }
+      setCopiedLinkMessage(`Микс снят с кальяна №${hookahId}`);
+    } catch (clearError) {
+      setActiveHookahsError(clearError.message || 'Не удалось снять микс');
+    } finally {
+      setClearingHookahIds((current) => current.filter((id) => id !== hookahId));
+    }
   }
 
   function addMixItem(tobacco) {
@@ -1640,6 +1670,10 @@ export default function App() {
                             <ExternalLink size={17} />
                             Открыть
                           </a>
+                          <button className="ghost-button" type="button" onClick={() => copyHookahLink(hookahId)}>
+                            <Copy size={17} />
+                            Скопировать ссылку
+                          </button>
                           <button
                             className="primary-button"
                             type="button"
@@ -1647,6 +1681,17 @@ export default function App() {
                           >
                             {mix ? 'Заменить микс' : 'Создать микс'}
                           </button>
+                          {mix && (
+                            <button
+                              className="ghost-button danger-button"
+                              disabled={clearingHookahIds.includes(hookahId)}
+                              type="button"
+                              onClick={() => clearHookahMix(hookahId)}
+                            >
+                              <Trash2 size={17} />
+                              {clearingHookahIds.includes(hookahId) ? 'Снимаю' : 'Снять микс'}
+                            </button>
+                          )}
                         </div>
                       </article>
                     );

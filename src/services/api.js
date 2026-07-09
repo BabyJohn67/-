@@ -97,3 +97,19 @@ export async function saveActiveMix(hookahId, mix, masterPin) {
 
   return data.mix;
 }
+
+export async function clearActiveMix(hookahId, masterPin) {
+  const response = await fetch(`/api/hookahs/${encodeURIComponent(hookahId)}/mix`, {
+    method: 'DELETE',
+    headers: {
+      'x-master-pin': masterPin
+    }
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось снять микс');
+  }
+
+  return data;
+}

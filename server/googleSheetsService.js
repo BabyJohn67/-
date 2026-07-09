@@ -339,3 +339,32 @@ export async function saveActiveMixToGoogleApi(mix) {
 
   return mix;
 }
+
+export async function clearActiveMixFromGoogleApi(hookahId) {
+  await ensureSheetExists(getActiveMixesSheetName(), ['hookahId', 'mixJson', 'createdAt']);
+
+  const sheets = getSheetsClient();
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${getActiveMixesSheetName()}!A:C`
+  });
+  const rows = result.data.values || [];
+  const matches = rows
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .filter(({ row }) => String(row[0] || '').trim() === String(hookahId));
+
+  await Promise.all(
+    matches.map(({ rowNumber }) =>
+      sheets.spreadsheets.values.clear({
+        spreadsheetId: getSheetId(),
+        range: `${getActiveMixesSheetName()}!A${rowNumber}:C${rowNumber}`
+      })
+    )
+  );
+
+  return {
+    hookahId: String(hookahId),
+    cleared: matches.length
+  };
+}

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   appendTobacco,
+  clearActiveMixFromGoogleApi,
   hasGoogleCredentials,
   readActiveMixFromGoogleApi,
   readTobaccosFromGoogleApi,
@@ -196,6 +197,35 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
   writeActiveMixes(mixes);
 
   response.json({ mix });
+});
+
+app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
+  const hookahId = String(request.params.hookahId || '').trim();
+
+  if (!hookahId) {
+    response.status(400).json({ message: 'Укажите номер кальяна.' });
+    return;
+  }
+
+  if (hasGoogleCredentials()) {
+    clearActiveMixFromGoogleApi(hookahId)
+      .then(() => {
+        response.json({ hookahId, mix: null });
+      })
+      .catch((error) => {
+        response.status(500).json({
+          message: 'Не удалось снять активный микс',
+          details: error.message
+        });
+      });
+    return;
+  }
+
+  const mixes = readActiveMixes();
+  delete mixes[hookahId];
+  writeActiveMixes(mixes);
+
+  response.json({ hookahId, mix: null });
 });
 
 app.get('/api/tobaccos', async (_request, response) => {
