@@ -125,6 +125,7 @@ async function ensureActiveMixesSheet() {
 
   await formatActiveMixesSheet(sheets, sheetId);
   await repairShiftedActiveMixRows(sheets, sheetName);
+  await deactivateSupersededActiveMixRows(sheets, sheetName);
   await syncReadableActiveMixRows(sheets, sheetName);
 }
 
@@ -294,6 +295,43 @@ async function repairShiftedActiveMixRows(sheets, sheetName) {
         values: [[...repaired.slice(0, ACTIVE_MIX_HEADERS.length), '']]
       };
     });
+
+  if (updates.length === 0) return;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: updates
+    }
+  });
+}
+
+async function deactivateSupersededActiveMixRows(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:N`
+  });
+  const activeRowsByHookah = (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => normalizeActiveMixFromRow(row, rowNumber))
+    .filter((item) => item?.isActive)
+    .reduce((groups, item) => {
+      const hookahId = String(item.mix.hookahId);
+      groups[hookahId] = [...(groups[hookahId] || []), item];
+      return groups;
+    }, {});
+
+  const updatedAt = new Date().toISOString();
+  const updates = Object.values(activeRowsByHookah)
+    .flatMap((rows) => rows
+      .sort((left, right) => left.rowNumber - right.rowNumber)
+      .slice(0, -1)
+      .map(({ rowNumber, mix }) => ({
+        range: `${sheetName}!F${rowNumber}:M${rowNumber}`,
+        values: [[updatedAt, 'FALSE', ...buildReadableActiveMixCells(mix, false, updatedAt)]]
+      })));
 
   if (updates.length === 0) return;
 
