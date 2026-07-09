@@ -124,6 +124,7 @@ async function ensureActiveMixesSheet() {
   }
 
   await formatActiveMixesSheet(sheets, sheetId);
+  await repairShiftedActiveMixRows(sheets, sheetName);
   await syncReadableActiveMixRows(sheets, sheetName);
 }
 
@@ -207,6 +208,10 @@ function parseJsonCell(value) {
   }
 }
 
+function isShiftedActiveMixRow(row) {
+  return !String(row[0] || '').trim() && String(row[1] || '').trim() && Array.isArray(parseJsonCell(row[3]));
+}
+
 async function getSheetTabId(sheetName) {
   const sheets = getSheetsClient();
   const spreadsheet = await sheets.spreadsheets.get({
@@ -272,10 +277,39 @@ function cellsAreEqual(left, right) {
   return left.length === right.length && left.every((value, index) => String(value || '') === String(right[index] || ''));
 }
 
+async function repairShiftedActiveMixRows(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:N`
+  });
+  const updates = (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .filter(({ row }) => isShiftedActiveMixRow(row))
+    .map(({ row, rowNumber }) => {
+      const repaired = row.slice(1, 14);
+      while (repaired.length < ACTIVE_MIX_HEADERS.length) repaired.push('');
+      return {
+        range: `${sheetName}!A${rowNumber}:N${rowNumber}`,
+        values: [[...repaired.slice(0, ACTIVE_MIX_HEADERS.length), '']]
+      };
+    });
+
+  if (updates.length === 0) return;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: updates
+    }
+  });
+}
+
 async function syncReadableActiveMixRows(sheets, sheetName) {
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
-    range: `${sheetName}!A:M`
+    range: `${sheetName}!A:N`
   });
   const updates = (result.data.values || [])
     .map((row, index) => ({ row, rowNumber: index + 1 }))
@@ -464,6 +498,11 @@ async function formatActiveMixesSheet(sheets, sheetId) {
 }
 
 function normalizeActiveMixFromRow(row, rowNumber) {
+  if (isShiftedActiveMixRow(row)) {
+    const shifted = row.slice(1, 14);
+    return normalizeActiveMixFromRow(shifted, rowNumber);
+  }
+
   const hookahId = String(row[0] || '').trim();
   if (!hookahId) return null;
 
@@ -504,7 +543,7 @@ async function getActiveMixRows() {
   const sheets = getSheetsClient();
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:G`
+    range: `${getActiveMixesSheetName()}!A:N`
   });
 
   return (result.data.values || [])
@@ -708,26 +747,42 @@ export async function readAllActiveMixesFromGoogleApi() {
 export async function saveActiveMixToGoogleApi(mix) {
   const updatedAt = new Date().toISOString();
   const sheets = getSheetsClient();
+  const sheetId = await getSheetTabId(getActiveMixesSheetName());
   const rows = await getActiveMixRows();
 
   await deactivateActiveMixRows(sheets, rows, mix.hookahId, updatedAt);
 
-  await sheets.spreadsheets.values.append({
+  const values = [
+    mix.hookahId,
+    mix.id,
+    JSON.stringify(mix.tobaccos || []),
+    mix.comment || '',
+    mix.createdAt,
+    updatedAt,
+    'TRUE',
+    ...buildReadableActiveMixCells(mix, true, updatedAt)
+  ];
+
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:M`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
     requestBody: {
-      values: [[
-        mix.hookahId,
-        mix.id,
-        JSON.stringify(mix.tobaccos || []),
-        mix.comment || '',
-        mix.createdAt,
-        updatedAt,
-        'TRUE',
-        ...buildReadableActiveMixCells(mix, true, updatedAt)
-      ]]
+      requests: [
+        {
+          appendCells: {
+            sheetId,
+            rows: [
+              {
+                values: values.map((value) => ({
+                  userEnteredValue: {
+                    stringValue: String(value || '')
+                  }
+                }))
+              }
+            ],
+            fields: 'userEnteredValue'
+          }
+        }
+      ]
     }
   });
 
