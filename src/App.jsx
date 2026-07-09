@@ -971,10 +971,12 @@ export default function App() {
               <small>табачная карта</small>
             </span>
           </a>
-          <div className="nav-links">
-            <a href="#taste-builder">Подбор</a>
-            <a href="#all-tobaccos">Все табаки</a>
-          </div>
+          {!isMaster && (
+            <div className="nav-links">
+              <a href="#taste-builder">Подбор</a>
+              <a href="#all-tobaccos">Все табаки</a>
+            </div>
+          )}
           <div className="nav-auth">
             {isMaster ? (
               <a className="login-button" href="#master">
@@ -990,29 +992,29 @@ export default function App() {
           </div>
         </nav>
 
-        <section className="hero">
-          <div>
-            <span className="eyebrow">QR-меню для гостей</span>
-            <h1>Hookah Menu</h1>
-            <p>Выберите вкус для кальяна за пару нажатий.</p>
-            <div className="hero-actions">
-              <a className="primary-button" href="#taste-builder">Подобрать вкус</a>
-              <a className="ghost-button hero-secondary-link" href="#all-tobaccos">Смотреть все табаки</a>
-              {!isMaster && (
+        {!isMaster && (
+          <section className="hero">
+            <div>
+              <span className="eyebrow">QR-меню для гостей</span>
+              <h1>Hookah Menu</h1>
+              <p>Выберите вкус для кальяна за пару нажатий.</p>
+              <div className="hero-actions">
+                <a className="primary-button" href="#taste-builder">Подобрать вкус</a>
+                <a className="ghost-button hero-secondary-link" href="#all-tobaccos">Смотреть все табаки</a>
                 <button className="call-master-hero-button" type="button" onClick={callMaster}>
                   <BellRing size={18} />
                   Позвать мастера
                 </button>
-              )}
+              </div>
             </div>
-          </div>
 
-          <aside className="status-panel" aria-label="Краткая статистика">
-            <span>Сегодня доступно</span>
-            <strong>{availableCount}</strong>
-            <small>из {tobaccos.length} позиций</small>
-          </aside>
-        </section>
+            <aside className="status-panel" aria-label="Краткая статистика">
+              <span>Сегодня доступно</span>
+              <strong>{availableCount}</strong>
+              <small>из {tobaccos.length} позиций</small>
+            </aside>
+          </section>
+        )}
       </header>
 
       {isLoginOpen && (
@@ -1085,6 +1087,8 @@ export default function App() {
         </div>
       )}
 
+      {!isMaster && (
+        <>
       <section className="guest-flow-section" id="taste-builder">
         <div className="section-heading">
           <div>
@@ -1386,6 +1390,8 @@ export default function App() {
           </div>
         )}
       </section>
+        </>
+      )}
 
       {isMaster && (
         <section className="master-section" id="master">
