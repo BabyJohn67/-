@@ -4,7 +4,21 @@ const DEFAULT_SHEET_ID = '1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o';
 const DEFAULT_SHEET_NAME = 'Табаки';
 const DEFAULT_ACTIVE_MIXES_SHEET_NAME = 'Активные миксы';
 const GRAMS_PER_UNIT = 8.5;
-const ACTIVE_MIX_HEADERS = ['hookahId', 'mixId', 'itemsJson', 'comment', 'createdAt', 'updatedAt', 'isActive'];
+const ACTIVE_MIX_HEADERS = [
+  'hookahId',
+  'mixId',
+  'itemsJson',
+  'comment',
+  'createdAt',
+  'updatedAt',
+  'isActive',
+  'Кальян',
+  'Статус',
+  'Состав микса',
+  'Комментарий мастера',
+  'Создан',
+  'Обновлен'
+];
 
 function getSheetId() {
   return process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
@@ -90,9 +104,10 @@ async function ensureActiveMixesSheet() {
   await ensureSheetExists(sheetName, ACTIVE_MIX_HEADERS);
 
   const sheets = getSheetsClient();
+  const sheetId = await getSheetTabId(sheetName);
   const values = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
-    range: `${sheetName}!A1:G1`
+    range: `${sheetName}!A1:M1`
   });
   const headers = (values.data.values?.[0] || []).map(normalizeHeader);
   const isCurrentSchema = ACTIVE_MIX_HEADERS.every((header, index) => headers[index] === normalizeHeader(header));
@@ -100,13 +115,16 @@ async function ensureActiveMixesSheet() {
   if (!isCurrentSchema) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: getSheetId(),
-      range: `${sheetName}!A1:G1`,
+      range: `${sheetName}!A1:M1`,
       valueInputOption: 'RAW',
       requestBody: {
         values: [ACTIVE_MIX_HEADERS]
       }
     });
   }
+
+  await formatActiveMixesSheet(sheets, sheetId);
+  await syncReadableActiveMixRows(sheets, sheetName);
 }
 
 function normalizeHeader(value) {
@@ -189,6 +207,218 @@ function parseJsonCell(value) {
   }
 }
 
+async function getSheetTabId(sheetName) {
+  const sheets = getSheetsClient();
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: getSheetId()
+  });
+  const targetSheet = spreadsheet.data.sheets?.find((sheet) => sheet.properties?.title === sheetName);
+
+  if (!targetSheet?.properties?.sheetId && targetSheet?.properties?.sheetId !== 0) {
+    throw new Error(`Вкладка "${sheetName}" не найдена в Google Таблице.`);
+  }
+
+  return targetSheet.properties.sheetId;
+}
+
+function formatHookahLabel(hookahId) {
+  const normalized = String(hookahId || '').trim();
+  return /^\d+$/.test(normalized) ? `Кальян №${normalized}` : normalized;
+}
+
+function formatDateCell(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value || '');
+  }
+
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'Europe/Moscow'
+  }).format(date);
+}
+
+function formatTobaccosReadable(tobaccos) {
+  if (!Array.isArray(tobaccos) || tobaccos.length === 0) {
+    return '';
+  }
+
+  return tobaccos
+    .map((item) => {
+      const title = [item.brand, item.name].filter(Boolean).join(' ').trim() || 'Табак';
+      const percent = Number.isFinite(Number(item.percent)) ? `${Number(item.percent)}%` : '';
+      const taste = String(item.taste || '').trim();
+      return [`${title}${percent ? ` — ${percent}` : ''}`, taste].filter(Boolean).join('\n');
+    })
+    .join('\n\n');
+}
+
+function buildReadableActiveMixCells(mix, isActive, updatedAt = mix.updatedAt) {
+  const active = Boolean(isActive);
+
+  return [
+    formatHookahLabel(mix.hookahId),
+    active ? 'Активен' : 'Снят',
+    formatTobaccosReadable(mix.tobaccos),
+    String(mix.comment || ''),
+    formatDateCell(mix.createdAt),
+    formatDateCell(updatedAt || mix.updatedAt || mix.createdAt)
+  ];
+}
+
+function cellsAreEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => String(value || '') === String(right[index] || ''));
+}
+
+async function syncReadableActiveMixRows(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:M`
+  });
+  const updates = (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => {
+      const normalized = normalizeActiveMixFromRow(row, rowNumber);
+      if (!normalized) return null;
+
+      const expected = buildReadableActiveMixCells(
+        normalized.mix,
+        normalized.isActive,
+        normalized.mix.updatedAt || row[5]
+      );
+      const current = row.slice(7, 13);
+
+      if (cellsAreEqual(current, expected)) return null;
+
+      return {
+        range: `${sheetName}!H${rowNumber}:M${rowNumber}`,
+        values: [expected]
+      };
+    })
+    .filter(Boolean);
+
+  if (updates.length === 0) return;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: updates
+    }
+  });
+}
+
+async function formatActiveMixesSheet(sheets, sheetId) {
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              gridProperties: {
+                frozenRowCount: 1
+              }
+            },
+            fields: 'gridProperties.frozenRowCount'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: ACTIVE_MIX_HEADERS.length
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.05, green: 0.05, blue: 0.05 },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
+                textFormat: {
+                  foregroundColor: { red: 0.95, green: 0.76, blue: 0.35 },
+                  bold: true
+                }
+              }
+            },
+            fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: 7,
+              endColumnIndex: ACTIVE_MIX_HEADERS.length
+            },
+            cell: {
+              userEnteredFormat: {
+                wrapStrategy: 'WRAP',
+                verticalAlignment: 'TOP'
+              }
+            },
+            fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
+          }
+        },
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId,
+              dimension: 'COLUMNS',
+              startIndex: 0,
+              endIndex: 7
+            },
+            properties: {
+              hiddenByUser: true
+            },
+            fields: 'hiddenByUser'
+          }
+        },
+        ...[
+          [7, 120],
+          [8, 110],
+          [9, 420],
+          [10, 260],
+          [11, 150],
+          [12, 150]
+        ].map(([index, pixelSize]) => ({
+          updateDimensionProperties: {
+            range: {
+              sheetId,
+              dimension: 'COLUMNS',
+              startIndex: index,
+              endIndex: index + 1
+            },
+            properties: {
+              pixelSize
+            },
+            fields: 'pixelSize'
+          }
+        })),
+        {
+          setBasicFilter: {
+            filter: {
+              range: {
+                sheetId,
+                startRowIndex: 0,
+                startColumnIndex: 0,
+                endColumnIndex: ACTIVE_MIX_HEADERS.length
+              }
+            }
+          }
+        }
+      ]
+    }
+  });
+}
+
 function normalizeActiveMixFromRow(row, rowNumber) {
   const hookahId = String(row[0] || '').trim();
   if (!hookahId) return null;
@@ -246,13 +476,13 @@ async function deactivateActiveMixRows(sheets, rows, hookahId, updatedAt) {
   );
 
   await Promise.all(
-    activeMatches.map(({ rowNumber }) =>
+    activeMatches.map(({ rowNumber, mix }) =>
       sheets.spreadsheets.values.update({
         spreadsheetId: getSheetId(),
-        range: `${getActiveMixesSheetName()}!F${rowNumber}:G${rowNumber}`,
+        range: `${getActiveMixesSheetName()}!F${rowNumber}:M${rowNumber}`,
         valueInputOption: 'RAW',
         requestBody: {
-          values: [[updatedAt, 'FALSE']]
+          values: [[updatedAt, 'FALSE', ...buildReadableActiveMixCells(mix, false, updatedAt)]]
         }
       })
     )
@@ -440,7 +670,7 @@ export async function saveActiveMixToGoogleApi(mix) {
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:G`,
+    range: `${getActiveMixesSheetName()}!A:M`,
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
@@ -451,7 +681,8 @@ export async function saveActiveMixToGoogleApi(mix) {
         mix.comment || '',
         mix.createdAt,
         updatedAt,
-        'TRUE'
+        'TRUE',
+        ...buildReadableActiveMixCells(mix, true, updatedAt)
       ]]
     }
   });
