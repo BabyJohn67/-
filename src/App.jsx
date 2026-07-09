@@ -34,12 +34,31 @@ import {
 } from './services/api.js';
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
+const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
 const MASTER_SESSION_KEY = 'hookah-menu-master-enabled-v1';
 const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
 const HOOKAH_COUNT = 6;
 const MASTER_LOGIN = 'master';
+
+const HOOKAH_FORMATS = [
+  {
+    id: 'classic',
+    title: 'Классический',
+    description: 'Стандартная забивка на чаше. Быстрый и понятный вариант на каждый день.'
+  },
+  {
+    id: 'fruit',
+    title: 'На фрукте',
+    description: 'Подача на фрукте: ярче, сочнее и эффектнее. Конкретный фрукт уточнит мастер.'
+  },
+  {
+    id: 'signature',
+    title: 'Авторский',
+    description: 'Особая подача от мастера с красивым оформлением и необычной идеей.'
+  }
+];
 
 const TASTE_CATEGORIES = [
   {
@@ -190,6 +209,15 @@ function loadStoredChoice() {
   }
 }
 
+function loadStoredFormat() {
+  try {
+    const storedFormat = localStorage.getItem(FORMAT_STORAGE_KEY);
+    return HOOKAH_FORMATS.some((format) => format.id === storedFormat) ? storedFormat : '';
+  } catch {
+    return '';
+  }
+}
+
 function loadStoredMasterSession() {
   try {
     return sessionStorage.getItem(MASTER_SESSION_KEY) === 'true';
@@ -333,6 +361,7 @@ export default function App() {
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [selectedStrength, setSelectedStrength] = useState('any');
+  const [selectedFormatId, setSelectedFormatId] = useState(() => loadStoredFormat());
   const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
   const [guestComment, setGuestComment] = useState('');
   const [preparedRequest, setPreparedRequest] = useState(null);
@@ -462,6 +491,15 @@ export default function App() {
   }, [choiceItems]);
 
   useEffect(() => {
+    if (selectedFormatId) {
+      localStorage.setItem(FORMAT_STORAGE_KEY, selectedFormatId);
+      return;
+    }
+
+    localStorage.removeItem(FORMAT_STORAGE_KEY);
+  }, [selectedFormatId]);
+
+  useEffect(() => {
     localStorage.setItem(TABLE_STORAGE_KEY, tableNumber);
   }, [tableNumber]);
 
@@ -475,6 +513,7 @@ export default function App() {
   }, [isMaster]);
 
   const choiceIds = useMemo(() => new Set(choiceItems.map((item) => item.id)), [choiceItems]);
+  const selectedFormat = HOOKAH_FORMATS.find((format) => format.id === selectedFormatId) || null;
 
   const selectedCategories = TASTE_CATEGORIES.filter((category) =>
     selectedCategoryIds.includes(category.id)
@@ -675,6 +714,7 @@ export default function App() {
   }
 
   function prepareChoiceRequest() {
+    const formatText = selectedFormat ? selectedFormat.title : 'формат не выбран';
     const choiceText = choiceItems.length > 0
       ? choiceItems.map((item, index) => `${index + 1}. ${item.brand} ${item.name} - ${item.taste}`).join('\n')
       : 'гость пока не выбрал конкретные табаки';
@@ -683,6 +723,7 @@ export default function App() {
       type: 'choice',
       title: 'Запрос по выбранным табакам',
       text: [
+        `Формат кальяна: ${formatText}`,
         'Гость выбрал конкретные табаки:',
         choiceText,
         guestComment.trim() ? `Комментарий гостя: ${guestComment.trim()}` : 'Комментарий гостя: не указан'
@@ -1131,7 +1172,7 @@ export default function App() {
           </a>
           {!isMaster && (
             <div className="nav-links">
-              <a href="#taste-builder">Подбор</a>
+              <a href="#hookah-format">Подбор</a>
               <a href="#all-tobaccos">Все табаки</a>
             </div>
           )}
@@ -1157,7 +1198,7 @@ export default function App() {
               <h1>Hookah Menu</h1>
               <p>Выберите вкус для кальяна за пару нажатий.</p>
               <div className="hero-actions">
-                <a className="primary-button" href="#taste-builder">Подобрать вкус</a>
+                <a className="primary-button" href="#hookah-format">Подобрать вкус</a>
                 <a className="ghost-button hero-secondary-link" href="#all-tobaccos">Смотреть все табаки</a>
                 <button className="call-master-hero-button" type="button" onClick={callMaster}>
                   <BellRing size={18} />
@@ -1294,6 +1335,37 @@ export default function App() {
 
       {!isMaster && (
         <>
+      <section className="hookah-format-section" id="hookah-format" aria-label="Выберите формат кальяна">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">Формат подачи</span>
+            <h2>Выберите формат кальяна</h2>
+          </div>
+        </div>
+
+        <div className="hookah-format-grid">
+          {HOOKAH_FORMATS.map((format) => {
+            const isSelected = selectedFormatId === format.id;
+
+            return (
+              <button
+                className={`hookah-format-card${isSelected ? ' is-selected' : ''}`}
+                key={format.id}
+                type="button"
+                onClick={() => setSelectedFormatId(format.id)}
+              >
+                <span className="hookah-format-photo">Фото скоро</span>
+                <span className="hookah-format-copy">
+                  <strong>{format.title}</strong>
+                  <small>{format.description}</small>
+                </span>
+                <span className="hookah-format-action">{isSelected ? 'Выбрано' : 'Выбрать'}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="guest-flow-section" id="taste-builder">
         <div className="section-heading">
           <div>
@@ -1437,6 +1509,11 @@ export default function App() {
                 Очистить
               </button>
             )}
+          </div>
+
+          <div className="choice-format-summary">
+            <span>Формат кальяна</span>
+            <strong>{selectedFormat ? selectedFormat.title : 'Пока не выбран'}</strong>
           </div>
 
           {choiceItems.length === 0 ? (

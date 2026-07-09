@@ -45,6 +45,7 @@ main {
 }
 
 .site-header,
+.hookah-format-section,
 .guest-flow-section,
 .toolbar-section,
 .master-section {
@@ -360,6 +361,7 @@ h1 {
   line-height: 1;
 }
 
+.hookah-format-section,
 .guest-flow-section,
 .toolbar-section,
 .master-section {
@@ -422,6 +424,89 @@ h2 {
 .filter-toggle input,
 .switch-line input {
   accent-color: var(--gold);
+}
+
+.hookah-format-section {
+  padding-top: 8px;
+}
+
+.hookah-format-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.hookah-format-card {
+  display: grid;
+  gap: 14px;
+  min-height: 100%;
+  border: 1px solid rgba(242, 207, 131, 0.22);
+  border-radius: 8px;
+  padding: 14px;
+  color: #f8f0dd;
+  text-align: left;
+  background: rgba(21, 18, 13, 0.74);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.hookah-format-card:hover,
+.hookah-format-card.is-selected {
+  border-color: rgba(242, 207, 131, 0.78);
+  background: rgba(31, 26, 18, 0.94);
+  transform: translateY(-1px);
+}
+
+.hookah-format-card.is-selected {
+  box-shadow: 0 18px 42px rgba(217, 170, 69, 0.14);
+}
+
+.hookah-format-photo {
+  min-height: 138px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(242, 207, 131, 0.42);
+  border-radius: 8px;
+  color: var(--gold-soft);
+  background:
+    linear-gradient(135deg, rgba(242, 207, 131, 0.12), transparent 42%),
+    rgba(255, 255, 255, 0.04);
+  font-weight: 900;
+}
+
+.hookah-format-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.hookah-format-copy strong {
+  color: #fff6e4;
+  font-size: 21px;
+}
+
+.hookah-format-copy small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.hookah-format-action {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  border: 1px solid rgba(242, 207, 131, 0.24);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #f7ebd1;
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 900;
+}
+
+.hookah-format-card.is-selected .hookah-format-action {
+  border-color: transparent;
+  color: #171007;
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
 }
 
 .taste-builder {
@@ -838,6 +923,28 @@ h2 {
 .choice-list {
   display: grid;
   gap: 10px;
+}
+
+.choice-format-summary {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid rgba(242, 207, 131, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.choice-format-summary span {
+  color: var(--gold-soft);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.choice-format-summary strong {
+  color: #fff6e4;
+  font-size: 18px;
 }
 
 .choice-item {
@@ -1985,6 +2092,10 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .hookah-format-grid {
+    grid-template-columns: 1fr;
+  }
+
   .recommendation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2044,6 +2155,7 @@ h2 {
 
 @media (max-width: 560px) {
   .site-header,
+  .hookah-format-section,
   .guest-flow-section,
   .toolbar-section,
   .master-section {
