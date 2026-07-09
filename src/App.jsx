@@ -1545,9 +1545,9 @@ export default function App() {
 
             <div className="master-tabs" role="tablist" aria-label="Разделы панели мастера">
               {[
-                ['stock', 'Остатки'],
-                ['active', 'Активные кальяны'],
                 ['order', 'Создать заказ'],
+                ['active', 'Активные кальяны'],
+                ['stock', 'Остатки'],
                 ['qr', 'QR кальянов']
               ].map(([value, label]) => (
                 <button
