@@ -201,6 +201,11 @@ function isTruthyActive(value) {
   return !['false', '0', 'no', 'нет', 'inactive', 'архив'].includes(normalized);
 }
 
+function isActiveMarker(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['true', 'false', '1', '0', 'yes', 'no', 'да', 'нет', 'active', 'inactive', 'активен', 'снят'].includes(normalized);
+}
+
 function parseJsonCell(value) {
   try {
     return JSON.parse(String(value || ''));
@@ -211,6 +216,33 @@ function parseJsonCell(value) {
 
 function isShiftedActiveMixRow(row) {
   return !String(row[0] || '').trim() && String(row[1] || '').trim() && Array.isArray(parseJsonCell(row[3]));
+}
+
+function isReadablePartShiftedRight(row) {
+  return Boolean(
+    String(row[0] || '').trim() &&
+    Array.isArray(parseJsonCell(row[2])) &&
+    !String(row[6] || '').trim() &&
+    isActiveMarker(row[7])
+  );
+}
+
+function repairReadablePartShiftedRight(row) {
+  return [
+    row[0] || '',
+    row[1] || '',
+    row[2] || '',
+    row[3] || '',
+    row[4] || '',
+    row[5] || '',
+    row[7] || '',
+    row[8] || '',
+    row[9] || '',
+    row[10] || '',
+    row[11] || '',
+    row[12] || '',
+    row[13] || ''
+  ];
 }
 
 async function getSheetTabId(sheetName) {
@@ -286,15 +318,24 @@ async function repairShiftedActiveMixRows(sheets, sheetName) {
   const updates = (result.data.values || [])
     .map((row, index) => ({ row, rowNumber: index + 1 }))
     .slice(1)
-    .filter(({ row }) => isShiftedActiveMixRow(row))
     .map(({ row, rowNumber }) => {
+      if (isReadablePartShiftedRight(row)) {
+        return {
+          range: `${sheetName}!A${rowNumber}:N${rowNumber}`,
+          values: [[...repairReadablePartShiftedRight(row), '']]
+        };
+      }
+
+      if (!isShiftedActiveMixRow(row)) return null;
+
       const repaired = row.slice(1, 14);
       while (repaired.length < ACTIVE_MIX_HEADERS.length) repaired.push('');
       return {
         range: `${sheetName}!A${rowNumber}:N${rowNumber}`,
         values: [[...repaired.slice(0, ACTIVE_MIX_HEADERS.length), '']]
       };
-    });
+    })
+    .filter(Boolean);
 
   if (updates.length === 0) return;
 
@@ -541,6 +582,10 @@ function normalizeActiveMixFromRow(row, rowNumber) {
     return normalizeActiveMixFromRow(shifted, rowNumber);
   }
 
+  if (isReadablePartShiftedRight(row)) {
+    return normalizeActiveMixFromRow(repairReadablePartShiftedRight(row), rowNumber);
+  }
+
   const hookahId = String(row[0] || '').trim();
   if (!hookahId) return null;
 
@@ -785,7 +830,7 @@ export async function readAllActiveMixesFromGoogleApi() {
 export async function saveActiveMixToGoogleApi(mix) {
   const updatedAt = new Date().toISOString();
   const sheets = getSheetsClient();
-  const sheetId = await getSheetTabId(getActiveMixesSheetName());
+  const sheetName = getActiveMixesSheetName();
   const rows = await getActiveMixRows();
 
   await deactivateActiveMixRows(sheets, rows, mix.hookahId, updatedAt);
@@ -801,26 +846,18 @@ export async function saveActiveMixToGoogleApi(mix) {
     ...buildReadableActiveMixCells(mix, true, updatedAt)
   ];
 
-  await sheets.spreadsheets.batchUpdate({
+  const existingRows = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:M`
+  });
+  const nextRowNumber = Math.max(2, (existingRows.data.values || []).length + 1);
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A${nextRowNumber}:M${nextRowNumber}`,
+    valueInputOption: 'RAW',
     requestBody: {
-      requests: [
-        {
-          appendCells: {
-            sheetId,
-            rows: [
-              {
-                values: values.map((value) => ({
-                  userEnteredValue: {
-                    stringValue: String(value || '')
-                  }
-                }))
-              }
-            ],
-            fields: 'userEnteredValue'
-          }
-        }
-      ]
+      values: [values]
     }
   });
 
