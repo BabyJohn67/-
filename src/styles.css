@@ -1144,7 +1144,8 @@ h2 {
 
 .empty-state,
 .master-panel,
-.save-note {
+.save-note,
+.storage-note {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(21, 18, 13, 0.82);
@@ -1182,6 +1183,48 @@ h2 {
   padding: 14px;
   color: var(--gold-soft);
   background: rgba(217, 170, 69, 0.08);
+}
+
+.storage-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.storage-note strong,
+.storage-note span {
+  display: block;
+}
+
+.storage-note strong {
+  color: #fff6e4;
+}
+
+.storage-note span {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.storage-note.is-persistent {
+  border-color: rgba(156, 229, 189, 0.25);
+  background: rgba(40, 95, 62, 0.14);
+}
+
+.storage-note.is-persistent svg {
+  color: var(--success);
+}
+
+.storage-note.is-warning {
+  border-color: rgba(255, 179, 167, 0.32);
+  background: rgba(255, 179, 167, 0.1);
+}
+
+.storage-note.is-warning svg,
+.storage-note.is-warning strong {
+  color: var(--danger);
 }
 
 .master-save-message {

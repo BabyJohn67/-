@@ -25,6 +25,7 @@ import { fallbackTobaccos } from './data/fallbackTobaccos.js';
 import {
   addTobacco,
   clearActiveMix,
+  loadActiveMixes,
   loadActiveMix,
   loadConfig,
   loadTobaccos,
@@ -381,6 +382,7 @@ export default function App() {
   const [activeHookahsError, setActiveHookahsError] = useState('');
   const [clearingHookahIds, setClearingHookahIds] = useState([]);
   const [pendingClearHookahId, setPendingClearHookahId] = useState('');
+  const [activeMixStorage, setActiveMixStorage] = useState(null);
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -404,14 +406,20 @@ export default function App() {
     setActiveHookahsError('');
 
     try {
-      const results = await Promise.all(
-        Array.from({ length: HOOKAH_COUNT }, (_, index) => String(index + 1)).map(async (hookahId) => {
-          const data = await loadActiveMix(hookahId);
-          return [hookahId, data.mix || null];
-        })
-      );
+      const data = await loadActiveMixes();
+      const mixes = data.mixes || {};
 
-      setActiveHookahMixes(Object.fromEntries(results));
+      setActiveHookahMixes(
+        Object.fromEntries(
+          Array.from({ length: HOOKAH_COUNT }, (_, index) => {
+            const hookahId = String(index + 1);
+            return [hookahId, mixes[hookahId] || null];
+          })
+        )
+      );
+      if (data.storage) {
+        setActiveMixStorage(data.storage);
+      }
     } catch (loadError) {
       setActiveHookahsError(loadError.message || 'Не удалось загрузить активные кальяны');
     } finally {
@@ -424,6 +432,7 @@ export default function App() {
     loadConfig().then((config) => {
       setMasterPin(config.masterPin);
       setPublicSiteUrl(config.publicSiteUrl);
+      setActiveMixStorage(config.activeMixStorage);
     });
   }, []);
 
@@ -1616,6 +1625,20 @@ export default function App() {
               <Settings2 size={18} />
               Данные Google сохраняются только через backend. Если ключи Google не настроены, сайт покажет ошибку сохранения и продолжит работать на просмотр.
             </div>
+
+            {activeMixStorage && (
+              <div className={`storage-note ${activeMixStorage.isPersistent ? 'is-persistent' : 'is-warning'}`}>
+                <Settings2 size={18} />
+                <div>
+                  <strong>Активные миксы: {activeMixStorage.label}</strong>
+                  <span>
+                    {activeMixStorage.isPersistent
+                      ? 'Миксы кальянов сохраняются в Google Таблицу и переживают перезапуск Render.'
+                      : activeMixStorage.warning}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {masterSaveMessage && (
               <div className="master-save-message" role="status">

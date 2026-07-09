@@ -6,6 +6,7 @@ import {
   appendTobacco,
   clearActiveMixFromGoogleApi,
   hasGoogleCredentials,
+  readAllActiveMixesFromGoogleApi,
   readActiveMixFromGoogleApi,
   readTobaccosFromGoogleApi,
   rowsToTobaccos as rowsToTobaccosFromSheet,
@@ -66,6 +67,29 @@ function writeActiveMixes(mixes) {
   fs.writeFileSync(ACTIVE_MIXES_PATH, `${JSON.stringify(mixes, null, 2)}\n`);
 }
 
+function getActiveMixStorageInfo() {
+  const isGoogleSheets = hasGoogleCredentials();
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isGoogleSheets) {
+    return {
+      mode: 'google-sheets',
+      label: 'Google Таблица',
+      isPersistent: true,
+      warning: ''
+    };
+  }
+
+  return {
+    mode: 'local-json',
+    label: 'Локальный JSON',
+    isPersistent: false,
+    warning: isProduction
+      ? 'Активные миксы сейчас сохраняются во временный файл Render. После перезапуска или redeploy они могут пропасть. Добавьте GOOGLE_SERVICE_ACCOUNT_EMAIL и GOOGLE_PRIVATE_KEY.'
+      : 'Активные миксы сохраняются локально в server/data/activeMixes.json. Это удобно для разработки, но не подходит как основное хранилище на Render.'
+  };
+}
+
 function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -113,7 +137,33 @@ function requireMasterPin(request, response, next) {
 app.get('/api/config', (_request, response) => {
   response.json({
     masterPin: MASTER_PIN,
-    publicSiteUrl: process.env.PUBLIC_SITE_URL || ''
+    publicSiteUrl: process.env.PUBLIC_SITE_URL || '',
+    activeMixStorage: getActiveMixStorageInfo()
+  });
+});
+
+app.get('/api/hookahs/active-mixes', (_request, response) => {
+  if (hasGoogleCredentials()) {
+    readAllActiveMixesFromGoogleApi()
+      .then((mixes) => {
+        response.json({
+          mixes,
+          storage: getActiveMixStorageInfo()
+        });
+      })
+      .catch((error) => {
+        response.status(500).json({
+          message: 'Не удалось загрузить активные миксы',
+          details: error.message,
+          storage: getActiveMixStorageInfo()
+        });
+      });
+    return;
+  }
+
+  response.json({
+    mixes: readActiveMixes(),
+    storage: getActiveMixStorageInfo()
   });
 });
 
@@ -123,19 +173,20 @@ app.get('/api/hookahs/:hookahId/mix', (request, response) => {
   if (hasGoogleCredentials()) {
     readActiveMixFromGoogleApi(hookahId)
       .then((mix) => {
-        response.json({ hookahId, mix });
+        response.json({ hookahId, mix, storage: getActiveMixStorageInfo() });
       })
       .catch((error) => {
         response.status(500).json({
           message: 'Не удалось загрузить активный микс',
-          details: error.message
+          details: error.message,
+          storage: getActiveMixStorageInfo()
         });
       });
     return;
   }
 
   const mixes = readActiveMixes();
-  response.json({ hookahId, mix: mixes[hookahId] || null });
+  response.json({ hookahId, mix: mixes[hookahId] || null, storage: getActiveMixStorageInfo() });
 });
 
 app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
@@ -181,12 +232,13 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
   if (hasGoogleCredentials()) {
     saveActiveMixToGoogleApi(mix)
       .then((savedMix) => {
-        response.json({ mix: savedMix });
+        response.json({ mix: savedMix, storage: getActiveMixStorageInfo() });
       })
       .catch((error) => {
         response.status(500).json({
           message: 'Не удалось сохранить активный микс',
-          details: error.message
+          details: error.message,
+          storage: getActiveMixStorageInfo()
         });
       });
     return;
@@ -196,7 +248,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
   mixes[hookahId] = mix;
   writeActiveMixes(mixes);
 
-  response.json({ mix });
+  response.json({ mix, storage: getActiveMixStorageInfo() });
 });
 
 app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
@@ -210,12 +262,13 @@ app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) =
   if (hasGoogleCredentials()) {
     clearActiveMixFromGoogleApi(hookahId)
       .then(() => {
-        response.json({ hookahId, mix: null });
+        response.json({ hookahId, mix: null, storage: getActiveMixStorageInfo() });
       })
       .catch((error) => {
         response.status(500).json({
           message: 'Не удалось снять активный микс',
-          details: error.message
+          details: error.message,
+          storage: getActiveMixStorageInfo()
         });
       });
     return;
@@ -225,7 +278,7 @@ app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) =
   delete mixes[hookahId];
   writeActiveMixes(mixes);
 
-  response.json({ hookahId, mix: null });
+  response.json({ hookahId, mix: null, storage: getActiveMixStorageInfo() });
 });
 
 app.get('/api/tobaccos', async (_request, response) => {

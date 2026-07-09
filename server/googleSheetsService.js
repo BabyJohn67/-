@@ -4,6 +4,7 @@ const DEFAULT_SHEET_ID = '1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o';
 const DEFAULT_SHEET_NAME = 'Табаки';
 const DEFAULT_ACTIVE_MIXES_SHEET_NAME = 'Активные миксы';
 const GRAMS_PER_UNIT = 8.5;
+const ACTIVE_MIX_HEADERS = ['hookahId', 'mixId', 'itemsJson', 'comment', 'createdAt', 'updatedAt', 'isActive'];
 
 function getSheetId() {
   return process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
@@ -80,6 +81,30 @@ async function ensureSheetExists(sheetName, headers) {
   }
 }
 
+async function ensureActiveMixesSheet() {
+  const sheetName = getActiveMixesSheetName();
+  await ensureSheetExists(sheetName, ACTIVE_MIX_HEADERS);
+
+  const sheets = getSheetsClient();
+  const values = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A1:G1`
+  });
+  const headers = (values.data.values?.[0] || []).map(normalizeHeader);
+  const isCurrentSchema = ACTIVE_MIX_HEADERS.every((header, index) => headers[index] === normalizeHeader(header));
+
+  if (!isCurrentSchema) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: getSheetId(),
+      range: `${sheetName}!A1:G1`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [ACTIVE_MIX_HEADERS]
+      }
+    });
+  }
+}
+
 function normalizeHeader(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -144,6 +169,92 @@ function detectBrand(name) {
   if (match) return match[1];
 
   return String(name || 'Другое').trim().split(/\s+/)[0] || 'Другое';
+}
+
+function isTruthyActive(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return true;
+  return !['false', '0', 'no', 'нет', 'inactive', 'архив'].includes(normalized);
+}
+
+function parseJsonCell(value) {
+  try {
+    return JSON.parse(String(value || ''));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeActiveMixFromRow(row, rowNumber) {
+  const hookahId = String(row[0] || '').trim();
+  if (!hookahId) return null;
+
+  const legacyMix = parseJsonCell(row[1]);
+  if (legacyMix && typeof legacyMix === 'object' && !Array.isArray(legacyMix)) {
+    return {
+      rowNumber,
+      isActive: isTruthyActive(row[6]),
+      mix: {
+        ...legacyMix,
+        hookahId: String(legacyMix.hookahId || hookahId),
+        tobaccos: Array.isArray(legacyMix.tobaccos) ? legacyMix.tobaccos : [],
+        comment: String(legacyMix.comment || ''),
+        createdAt: legacyMix.createdAt || row[2] || '',
+        updatedAt: legacyMix.updatedAt || row[5] || legacyMix.createdAt || row[2] || ''
+      }
+    };
+  }
+
+  const items = parseJsonCell(row[2]);
+  return {
+    rowNumber,
+    isActive: isTruthyActive(row[6]),
+    mix: {
+      id: String(row[1] || `mix-${hookahId}-${rowNumber}`),
+      hookahId,
+      tobaccos: Array.isArray(items) ? items : [],
+      comment: String(row[3] || ''),
+      createdAt: String(row[4] || ''),
+      updatedAt: String(row[5] || row[4] || '')
+    }
+  };
+}
+
+async function getActiveMixRows() {
+  await ensureActiveMixesSheet();
+
+  const sheets = getSheetsClient();
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${getActiveMixesSheetName()}!A:G`
+  });
+
+  return (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => normalizeActiveMixFromRow(row, rowNumber))
+    .filter(Boolean);
+}
+
+async function deactivateActiveMixRows(sheets, rows, hookahId, updatedAt) {
+  const activeMatches = rows.filter(
+    (item) => item.isActive && String(item.mix.hookahId) === String(hookahId)
+  );
+
+  await Promise.all(
+    activeMatches.map(({ rowNumber }) =>
+      sheets.spreadsheets.values.update({
+        spreadsheetId: getSheetId(),
+        range: `${getActiveMixesSheetName()}!F${rowNumber}:G${rowNumber}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[updatedAt, 'FALSE']]
+        }
+      })
+    )
+  );
+
+  return activeMatches.length;
 }
 
 function buildTobacco(row, rowIndex, nameIndex, quantityIndex, tasteIndex, layout) {
@@ -277,94 +388,64 @@ export async function appendTobacco({ name, quantity, taste }) {
 }
 
 export async function readActiveMixFromGoogleApi(hookahId) {
-  await ensureSheetExists(getActiveMixesSheetName(), ['hookahId', 'mixJson', 'createdAt']);
-
-  const sheets = getSheetsClient();
-  const result = await sheets.spreadsheets.values.get({
-    spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:C`
-  });
-  const rows = result.data.values || [];
+  const rows = await getActiveMixRows();
   const match = rows
-    .map((row, index) => ({ row, rowNumber: index + 1 }))
-    .slice(1)
     .reverse()
-    .find(({ row }) => String(row[0] || '').trim() === String(hookahId));
+    .find((item) => item.isActive && String(item.mix.hookahId) === String(hookahId));
 
-  if (!match) return null;
+  return match?.mix || null;
+}
 
-  try {
-    return JSON.parse(match.row[1]);
-  } catch {
-    return null;
-  }
+export async function readAllActiveMixesFromGoogleApi() {
+  const rows = await getActiveMixRows();
+
+  return rows.reduce((mixes, item) => {
+    if (item.isActive) {
+      mixes[item.mix.hookahId] = item.mix;
+    }
+    return mixes;
+  }, {});
 }
 
 export async function saveActiveMixToGoogleApi(mix) {
-  await ensureSheetExists(getActiveMixesSheetName(), ['hookahId', 'mixJson', 'createdAt']);
-
+  const updatedAt = new Date().toISOString();
   const sheets = getSheetsClient();
-  const result = await sheets.spreadsheets.values.get({
-    spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:C`
-  });
-  const rows = result.data.values || [];
-  const existing = rows
-    .map((row, index) => ({ row, rowNumber: index + 1 }))
-    .slice(1)
-    .find(({ row }) => String(row[0] || '').trim() === String(mix.hookahId));
-  const values = [[mix.hookahId, JSON.stringify(mix), mix.createdAt]];
+  const rows = await getActiveMixRows();
 
-  if (existing) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: getSheetId(),
-      range: `${getActiveMixesSheetName()}!A${existing.rowNumber}:C${existing.rowNumber}`,
-      valueInputOption: 'RAW',
-      requestBody: {
-        values
-      }
-    });
-    return mix;
-  }
+  await deactivateActiveMixRows(sheets, rows, mix.hookahId, updatedAt);
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:C`,
+    range: `${getActiveMixesSheetName()}!A:G`,
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
-      values
+      values: [[
+        mix.hookahId,
+        mix.id,
+        JSON.stringify(mix.tobaccos || []),
+        mix.comment || '',
+        mix.createdAt,
+        updatedAt,
+        'TRUE'
+      ]]
     }
   });
 
-  return mix;
+  return {
+    ...mix,
+    updatedAt
+  };
 }
 
 export async function clearActiveMixFromGoogleApi(hookahId) {
-  await ensureSheetExists(getActiveMixesSheetName(), ['hookahId', 'mixJson', 'createdAt']);
-
+  const updatedAt = new Date().toISOString();
   const sheets = getSheetsClient();
-  const result = await sheets.spreadsheets.values.get({
-    spreadsheetId: getSheetId(),
-    range: `${getActiveMixesSheetName()}!A:C`
-  });
-  const rows = result.data.values || [];
-  const matches = rows
-    .map((row, index) => ({ row, rowNumber: index + 1 }))
-    .slice(1)
-    .filter(({ row }) => String(row[0] || '').trim() === String(hookahId));
-
-  await Promise.all(
-    matches.map(({ rowNumber }) =>
-      sheets.spreadsheets.values.clear({
-        spreadsheetId: getSheetId(),
-        range: `${getActiveMixesSheetName()}!A${rowNumber}:C${rowNumber}`
-      })
-    )
-  );
+  const rows = await getActiveMixRows();
+  const cleared = await deactivateActiveMixRows(sheets, rows, hookahId, updatedAt);
 
   return {
     hookahId: String(hookahId),
-    cleared: matches.length
+    cleared
   };
 }

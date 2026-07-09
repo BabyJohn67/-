@@ -23,12 +23,14 @@ export async function loadConfig() {
     const data = await response.json();
     return {
       masterPin: data.masterPin || FALLBACK_MASTER_PIN,
-      publicSiteUrl: data.publicSiteUrl || ''
+      publicSiteUrl: data.publicSiteUrl || '',
+      activeMixStorage: data.activeMixStorage || null
     };
   } catch {
     return {
       masterPin: FALLBACK_MASTER_PIN,
-      publicSiteUrl: ''
+      publicSiteUrl: '',
+      activeMixStorage: null
     };
   }
 }
@@ -75,6 +77,17 @@ export async function loadActiveMix(hookahId) {
 
   if (!response.ok) {
     throw new Error(data.message || 'Не удалось загрузить микс');
+  }
+
+  return data;
+}
+
+export async function loadActiveMixes() {
+  const response = await fetch('/api/hookahs/active-mixes');
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось загрузить активные кальяны');
   }
 
   return data;
