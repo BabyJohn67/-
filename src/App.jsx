@@ -375,6 +375,9 @@ export default function App() {
   const [masterTab, setMasterTab] = useState('stock');
   const [publicSiteUrl, setPublicSiteUrl] = useState('');
   const [copiedLinkMessage, setCopiedLinkMessage] = useState('');
+  const [activeHookahMixes, setActiveHookahMixes] = useState({});
+  const [isActiveHookahsLoading, setIsActiveHookahsLoading] = useState(false);
+  const [activeHookahsError, setActiveHookahsError] = useState('');
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -390,6 +393,26 @@ export default function App() {
       setError(loadError.message || 'Не удалось загрузить список табаков');
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function refreshActiveHookahs() {
+    setIsActiveHookahsLoading(true);
+    setActiveHookahsError('');
+
+    try {
+      const results = await Promise.all(
+        Array.from({ length: HOOKAH_COUNT }, (_, index) => String(index + 1)).map(async (hookahId) => {
+          const data = await loadActiveMix(hookahId);
+          return [hookahId, data.mix || null];
+        })
+      );
+
+      setActiveHookahMixes(Object.fromEntries(results));
+    } catch (loadError) {
+      setActiveHookahsError(loadError.message || 'Не удалось загрузить активные кальяны');
+    } finally {
+      setIsActiveHookahsLoading(false);
     }
   }
 
@@ -432,6 +455,11 @@ export default function App() {
 
   useEffect(() => {
     sessionStorage.setItem(MASTER_SESSION_KEY, String(isMaster));
+  }, [isMaster]);
+
+  useEffect(() => {
+    if (!isMaster) return;
+    refreshActiveHookahs();
   }, [isMaster]);
 
   const choiceIds = useMemo(() => new Set(choiceItems.map((item) => item.id)), [choiceItems]);
@@ -840,6 +868,22 @@ export default function App() {
     }));
   }
 
+  function startMixForHookah(hookahId, mix = null) {
+    setMixDraft({
+      hookahId,
+      comment: mix?.comment || '',
+      tobaccos: Array.isArray(mix?.tobaccos)
+        ? mix.tobaccos.map((item) => ({
+            tobaccoId: item.id,
+            percent: Number(item.percent || 0)
+          }))
+        : []
+    });
+    setMixSaveMessage('');
+    setLastSavedMix(null);
+    setMasterTab('order');
+  }
+
   function addMixItem(tobacco) {
     setMixDraft((current) => ({
       ...current,
@@ -916,6 +960,10 @@ export default function App() {
         masterPin
       );
       setLastSavedMix(saved);
+      setActiveHookahMixes((current) => ({
+        ...current,
+        [saved.hookahId]: saved
+      }));
       setMixSaveMessage(`Заказ сохранён для кальяна №${saved.hookahId}`);
     } catch (saveError) {
       setMixSaveMessage(saveError.message || 'Не удалось сохранить микс');
@@ -1497,6 +1545,7 @@ export default function App() {
             <div className="master-tabs" role="tablist" aria-label="Разделы панели мастера">
               {[
                 ['stock', 'Остатки'],
+                ['active', 'Активные кальяны'],
                 ['order', 'Создать заказ'],
                 ['qr', 'QR кальянов']
               ].map(([value, label]) => (
@@ -1510,6 +1559,100 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {masterTab === 'active' && (
+              <section className="active-hookahs-panel" aria-label="Активные кальяны">
+                <div className="master-mix-heading">
+                  <div>
+                    <span className="eyebrow">Состояние кальянов</span>
+                    <h3>Активные кальяны</h3>
+                  </div>
+                  <button
+                    className="ghost-button"
+                    disabled={isActiveHookahsLoading}
+                    type="button"
+                    onClick={refreshActiveHookahs}
+                  >
+                    <RefreshCcw size={17} />
+                    {isActiveHookahsLoading ? 'Обновляю' : 'Обновить'}
+                  </button>
+                </div>
+
+                {activeHookahsError && (
+                  <div className="error-banner" role="status">
+                    <div>
+                      <strong>Не удалось загрузить активные кальяны</strong>
+                      <span>{activeHookahsError}</span>
+                    </div>
+                    <button type="button" onClick={refreshActiveHookahs}>Повторить</button>
+                  </div>
+                )}
+
+                <div className="active-hookah-grid">
+                  {hookahNumbers.map((hookahId) => {
+                    const mix = activeHookahMixes[hookahId] || null;
+
+                    return (
+                      <article className={`active-hookah-card ${mix ? 'has-mix' : 'is-empty'}`} key={hookahId}>
+                        <div className="active-hookah-card-header">
+                          <div>
+                            <span className="active-hookah-status">
+                              {mix ? 'Микс назначен' : 'Микса нет'}
+                            </span>
+                            <h4>Кальян №{hookahId}</h4>
+                          </div>
+                          {mix?.createdAt && (
+                            <span className="active-hookah-date">
+                              <CalendarClock size={15} />
+                              {formatMixDate(mix.createdAt)}
+                            </span>
+                          )}
+                        </div>
+
+                        {mix ? (
+                          <>
+                            <div className="active-hookah-mix-list">
+                              {mix.tobaccos.map((item) => (
+                                <div className="active-hookah-mix-item" key={`${hookahId}-${item.id}-${item.percent}`}>
+                                  <strong>{item.brand} {item.name}</strong>
+                                  <span>{item.percent}%</span>
+                                  <small>{item.taste}</small>
+                                </div>
+                              ))}
+                            </div>
+
+                            {mix.comment && (
+                              <div className="active-hookah-comment">
+                                <span>Комментарий</span>
+                                <p>{mix.comment}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="active-hookah-empty">
+                            Для этого кальяна пока не назначен активный микс.
+                          </div>
+                        )}
+
+                        <div className="active-hookah-actions">
+                          <a className="ghost-button" href={`/hookah/${hookahId}`} target="_blank" rel="noreferrer">
+                            <ExternalLink size={17} />
+                            Открыть
+                          </a>
+                          <button
+                            className="primary-button"
+                            type="button"
+                            onClick={() => startMixForHookah(hookahId, mix)}
+                          >
+                            {mix ? 'Заменить микс' : 'Создать микс'}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {masterTab === 'order' && (
               <form className="master-mix-form" onSubmit={saveHookahMix}>
