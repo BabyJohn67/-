@@ -360,11 +360,55 @@ async function formatActiveMixesSheet(sheets, sheetId) {
             },
             cell: {
               userEnteredFormat: {
+                backgroundColor: { red: 1, green: 0.98, blue: 0.92 },
+                horizontalAlignment: 'LEFT',
                 wrapStrategy: 'WRAP',
-                verticalAlignment: 'TOP'
+                verticalAlignment: 'TOP',
+                textFormat: {
+                  foregroundColor: { red: 0.08, green: 0.07, blue: 0.05 },
+                  bold: false,
+                  fontSize: 10
+                }
               }
             },
-            fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
+            fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,wrapStrategy,verticalAlignment,textFormat)'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: 7,
+              endColumnIndex: 9
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER',
+                textFormat: {
+                  foregroundColor: { red: 0.08, green: 0.07, blue: 0.05 },
+                  bold: true,
+                  fontSize: 10
+                }
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment,textFormat)'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: 11,
+              endColumnIndex: ACTIVE_MIX_HEADERS.length
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER'
+              }
+            },
+            fields: 'userEnteredFormat(horizontalAlignment)'
           }
         },
         {
