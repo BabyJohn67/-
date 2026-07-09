@@ -380,6 +380,7 @@ export default function App() {
   const [isActiveHookahsLoading, setIsActiveHookahsLoading] = useState(false);
   const [activeHookahsError, setActiveHookahsError] = useState('');
   const [clearingHookahIds, setClearingHookahIds] = useState([]);
+  const [pendingClearHookahId, setPendingClearHookahId] = useState('');
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -908,8 +909,10 @@ export default function App() {
         }));
       }
       setCopiedLinkMessage(`Микс снят с кальяна №${hookahId}`);
+      return true;
     } catch (clearError) {
       setActiveHookahsError(clearError.message || 'Не удалось снять микс');
+      return false;
     } finally {
       setClearingHookahIds((current) => current.filter((id) => id !== hookahId));
     }
@@ -1223,6 +1226,53 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {pendingClearHookahId && (
+        <div className="auth-modal-backdrop" role="presentation">
+          <section className="auth-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="clear-mix-title">
+            <div className="auth-modal-header">
+              <div>
+                <span className="eyebrow">Активный кальян</span>
+                <h2 id="clear-mix-title">Снять микс?</h2>
+              </div>
+              <button
+                className="auth-close-button"
+                type="button"
+                aria-label="Закрыть подтверждение"
+                onClick={() => setPendingClearHookahId('')}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="confirm-modal-copy">
+              Вы уверены, что хотите снять микс с кальяна №{pendingClearHookahId}? После подтверждения
+              QR этого кальяна будет показывать, что микс пока не назначен.
+            </p>
+
+            <div className="auth-actions">
+              <button className="ghost-button" type="button" onClick={() => setPendingClearHookahId('')}>
+                Отмена
+              </button>
+              <button
+                className="primary-button danger-confirm-button"
+                disabled={clearingHookahIds.includes(pendingClearHookahId)}
+                type="button"
+                onClick={async () => {
+                  const hookahId = pendingClearHookahId;
+                  const isCleared = await clearHookahMix(hookahId);
+                  if (isCleared) {
+                    setPendingClearHookahId('');
+                  }
+                }}
+              >
+                <Trash2 size={17} />
+                {clearingHookahIds.includes(pendingClearHookahId) ? 'Снимаю' : 'Снять микс'}
+              </button>
+            </div>
           </section>
         </div>
       )}
@@ -1674,22 +1724,23 @@ export default function App() {
                             <Copy size={17} />
                             Скопировать ссылку
                           </button>
-                          <button
-                            className="primary-button"
-                            type="button"
-                            onClick={() => startMixForHookah(hookahId, mix)}
-                          >
-                            {mix ? 'Заменить микс' : 'Создать микс'}
-                          </button>
-                          {mix && (
+                          {mix ? (
                             <button
-                              className="ghost-button danger-button"
+                              className="primary-button danger-confirm-button"
                               disabled={clearingHookahIds.includes(hookahId)}
                               type="button"
-                              onClick={() => clearHookahMix(hookahId)}
+                              onClick={() => setPendingClearHookahId(hookahId)}
                             >
                               <Trash2 size={17} />
                               {clearingHookahIds.includes(hookahId) ? 'Снимаю' : 'Снять микс'}
+                            </button>
+                          ) : (
+                            <button
+                              className="primary-button"
+                              type="button"
+                              onClick={() => startMixForHookah(hookahId)}
+                            >
+                              Создать микс
                             </button>
                           )}
                         </div>
