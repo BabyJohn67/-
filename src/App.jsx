@@ -372,7 +372,7 @@ export default function App() {
   });
   const [loginError, setLoginError] = useState('');
   const [masterPin, setMasterPin] = useState('2580');
-  const [masterTab, setMasterTab] = useState('stock');
+  const [masterTab, setMasterTab] = useState('order');
   const [publicSiteUrl, setPublicSiteUrl] = useState('');
   const [copiedLinkMessage, setCopiedLinkMessage] = useState('');
   const [activeHookahMixes, setActiveHookahMixes] = useState({});
@@ -733,6 +733,7 @@ export default function App() {
     if (normalizedLogin === MASTER_LOGIN && masterCredentials.password === masterPin) {
       setIsMaster(true);
       setOnlyAvailable(false);
+      setMasterTab('order');
       setIsLoginOpen(false);
       setMasterCredentials({ login: '', password: '' });
       setLoginError('');
