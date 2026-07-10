@@ -40,7 +40,7 @@ const MASTER_SESSION_KEY = 'hookah-menu-master-enabled-v1';
 const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
-const HOOKAH_COUNT = 6;
+const HOOKAH_COUNT = 10;
 const MASTER_LOGIN = 'master';
 const LEGACY_FORMAT_VARIANT_IDS = {
   'fruit-citrus': 'citrus-fruit',

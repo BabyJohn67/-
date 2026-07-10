@@ -106,9 +106,7 @@ https://your-hookah-menu.ru
 Для физических кальянов добавлена страница активного микса:
 
 ```text
-/hookah/1
-/hookah/2
-/hookah/3
+/hookah/1 ... /hookah/10
 ```
 
 Мастер заходит в панель мастера, блок `Создать микс для кальяна`, указывает номер кальяна, табаки, проценты и комментарий. После сохранения гость, который откроет QR вида `/hookah/1`, увидит активный микс именно этого кальяна.
@@ -136,9 +134,7 @@ https://hookah-menu.onrender.com
 Для QR на кальяне нужны ссылки:
 
 ```text
-https://hookah-menu.onrender.com/hookah/1
-https://hookah-menu.onrender.com/hookah/2
-https://hookah-menu.onrender.com/hookah/3
+https://hookah-menu.onrender.com/hookah/1 ... https://hookah-menu.onrender.com/hookah/10
 ```
 
 ### Что уже подготовлено
