@@ -293,17 +293,49 @@ function formatTobaccosReadable(tobaccos) {
     .join('\n\n');
 }
 
+function formatMixFormatReadable(format) {
+  if (!format) return '';
+
+  const title = [format.title, format.variantTitle].filter(Boolean).join(' - ');
+  return [title, format.priceLabel].filter(Boolean).join('\n');
+}
+
 function buildReadableActiveMixCells(mix, isActive, updatedAt = mix.updatedAt) {
   const active = Boolean(isActive);
+  const commentLines = [
+    formatMixFormatReadable(mix.format),
+    String(mix.comment || '')
+  ].filter(Boolean);
 
   return [
     formatHookahLabel(mix.hookahId),
     active ? 'Активен' : 'Снят',
     formatTobaccosReadable(mix.tobaccos),
-    String(mix.comment || ''),
+    commentLines.join('\n\n'),
     formatDateCell(mix.createdAt),
     formatDateCell(updatedAt || mix.updatedAt || mix.createdAt)
   ];
+}
+
+function normalizeMixItems(value) {
+  if (Array.isArray(value)) {
+    return {
+      tobaccos: value,
+      format: null
+    };
+  }
+
+  if (value && typeof value === 'object') {
+    return {
+      tobaccos: Array.isArray(value.tobaccos) ? value.tobaccos : [],
+      format: value.format && typeof value.format === 'object' ? value.format : null
+    };
+  }
+
+  return {
+    tobaccos: [],
+    format: null
+  };
 }
 
 function cellsAreEqual(left, right) {
@@ -598,6 +630,7 @@ function normalizeActiveMixFromRow(row, rowNumber) {
         ...legacyMix,
         hookahId: String(legacyMix.hookahId || hookahId),
         tobaccos: Array.isArray(legacyMix.tobaccos) ? legacyMix.tobaccos : [],
+        format: legacyMix.format || null,
         comment: String(legacyMix.comment || ''),
         createdAt: legacyMix.createdAt || row[2] || '',
         updatedAt: legacyMix.updatedAt || row[5] || legacyMix.createdAt || row[2] || ''
@@ -605,14 +638,15 @@ function normalizeActiveMixFromRow(row, rowNumber) {
     };
   }
 
-  const items = parseJsonCell(row[2]);
+  const items = normalizeMixItems(parseJsonCell(row[2]));
   return {
     rowNumber,
     isActive: isTruthyActive(row[6]),
     mix: {
       id: String(row[1] || `mix-${hookahId}-${rowNumber}`),
       hookahId,
-      tobaccos: Array.isArray(items) ? items : [],
+      tobaccos: items.tobaccos,
+      format: items.format,
       comment: String(row[3] || ''),
       createdAt: String(row[4] || ''),
       updatedAt: String(row[5] || row[4] || '')
@@ -838,7 +872,10 @@ export async function saveActiveMixToGoogleApi(mix) {
   const values = [
     mix.hookahId,
     mix.id,
-    JSON.stringify(mix.tobaccos || []),
+    JSON.stringify({
+      tobaccos: mix.tobaccos || [],
+      format: mix.format || null
+    }),
     mix.comment || '',
     mix.createdAt,
     updatedAt,

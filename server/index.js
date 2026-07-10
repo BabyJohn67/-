@@ -134,6 +134,20 @@ function requireMasterPin(request, response, next) {
   next();
 }
 
+function normalizeMixFormat(value) {
+  if (!value || typeof value !== 'object') return null;
+
+  const format = {
+    id: String(value.id || '').trim(),
+    title: String(value.title || '').trim(),
+    variantId: String(value.variantId || value.id || '').trim(),
+    variantTitle: String(value.variantTitle || value.title || '').trim(),
+    priceLabel: String(value.priceLabel || '').trim()
+  };
+
+  return format.id && format.title && format.variantId && format.variantTitle ? format : null;
+}
+
 app.get('/api/config', (_request, response) => {
   response.json({
     masterPin: MASTER_PIN,
@@ -193,6 +207,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
   const tobaccos = Array.isArray(request.body.tobaccos) ? request.body.tobaccos : [];
   const comment = String(request.body.comment || '').trim();
+  const format = normalizeMixFormat(request.body.format);
 
   if (!hookahId) {
     response.status(400).json({ message: 'Укажите номер кальяна.' });
@@ -225,6 +240,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
     id: `mix-${hookahId}-${Date.now()}`,
     hookahId,
     tobaccos: normalizedTobaccos,
+    format,
     comment,
     createdAt: new Date().toISOString()
   };

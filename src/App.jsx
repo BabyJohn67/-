@@ -379,6 +379,7 @@ export default function App() {
   const [mixSaveMessage, setMixSaveMessage] = useState('');
   const [mixDraft, setMixDraft] = useState({
     hookahId: '',
+    formatId: '',
     comment: '',
     tobaccos: []
   });
@@ -685,7 +686,8 @@ export default function App() {
   }, [isMixPercentComplete, mixDraft.tobaccos.length, mixPercentTotal]);
 
   const isHookahSelected = hookahNumbers.includes(mixDraft.hookahId);
-  const canSaveMix = isHookahSelected && mixDraft.tobaccos.length > 0 && isMixPercentComplete;
+  const selectedMixFormat = findFormatSelection(mixDraft.formatId);
+  const canSaveMix = isHookahSelected && Boolean(selectedMixFormat) && mixDraft.tobaccos.length > 0 && isMixPercentComplete;
 
   function toggleTasteCategory(categoryId) {
     setSelectedCategoryIds((current) =>
@@ -931,6 +933,7 @@ export default function App() {
   function startMixForHookah(hookahId, mix = null) {
     setMixDraft({
       hookahId,
+      formatId: findFormatSelection(mix?.format?.variantId || mix?.format?.id)?.variant.id || '',
       comment: mix?.comment || '',
       tobaccos: Array.isArray(mix?.tobaccos)
         ? mix.tobaccos.map((item) => ({
@@ -960,6 +963,7 @@ export default function App() {
       if (mixDraft.hookahId === hookahId) {
         setMixDraft((current) => ({
           ...current,
+          formatId: '',
           comment: '',
           tobaccos: []
         }));
@@ -1025,6 +1029,11 @@ export default function App() {
       return;
     }
 
+    if (!selectedMixFormat) {
+      setMixSaveMessage('Выберите формат подачи для этого кальяна.');
+      return;
+    }
+
     if (!canSaveMix) {
       setMixSaveMessage(`Сумма процентов должна быть ровно 100%. Сейчас: ${mixPercentTotal}%.`);
       return;
@@ -1050,6 +1059,13 @@ export default function App() {
         mixDraft.hookahId,
         {
           tobaccos: selectedTobaccos,
+          format: {
+            id: selectedMixFormat.format.id,
+            title: selectedMixFormat.format.title,
+            variantId: selectedMixFormat.variant.id,
+            variantTitle: selectedMixFormat.variant.title,
+            priceLabel: selectedMixFormat.variant.priceLabel
+          },
           comment: mixDraft.comment
         },
         masterPin
@@ -1117,6 +1133,14 @@ export default function App() {
               </div>
             ) : (
               <>
+                {activeMix.format && (
+                  <div className="active-mix-format">
+                    <span>Формат подачи</span>
+                    <strong>{activeMix.format.title} - {activeMix.format.variantTitle}</strong>
+                    <small>{activeMix.format.priceLabel}</small>
+                  </div>
+                )}
+
                 <div className="active-mix-list">
                   {activeMix.tobaccos.map((item) => (
                     <article className="active-mix-item" key={`${item.id}-${item.percent}`}>
@@ -1846,6 +1870,14 @@ export default function App() {
 
                         {mix ? (
                           <>
+                            {mix.format && (
+                              <div className="active-hookah-format">
+                                <span>Формат</span>
+                                <strong>{mix.format.title} - {mix.format.variantTitle}</strong>
+                                <small>{mix.format.priceLabel}</small>
+                              </div>
+                            )}
+
                             <div className="active-hookah-mix-list">
                               {mix.tobaccos.map((item) => (
                                 <div className="active-hookah-mix-item" key={`${hookahId}-${item.id}-${item.percent}`}>
@@ -1940,6 +1972,45 @@ export default function App() {
                   {!isHookahSelected && (
                     <strong className="hookah-required-note">
                       Без выбора кальяна заказ сохранить нельзя.
+                    </strong>
+                  )}
+                </div>
+
+                <div className="master-format-picker" aria-label="Выберите формат подачи">
+                  <div className="hookah-number-heading">
+                    <div>
+                      <span className="eyebrow">Формат подачи</span>
+                      <h4>Выберите вариант подачи</h4>
+                    </div>
+                    <p>
+                      Используются те же варианты, которые видит гость в разделе выбора формата кальяна.
+                    </p>
+                  </div>
+
+                  <div className="master-format-groups">
+                    {hookahFormats.map((format) => (
+                      <section className="master-format-group" key={format.id}>
+                        <h5>{format.title}</h5>
+                        <div>
+                          {format.variants.map((variant) => (
+                            <button
+                              className={mixDraft.formatId === variant.id ? 'is-active' : ''}
+                              key={variant.id}
+                              type="button"
+                              onClick={() => setMixDraft((current) => ({ ...current, formatId: variant.id }))}
+                            >
+                              <strong>{variant.title}</strong>
+                              <small>{variant.priceLabel}</small>
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+
+                  {!selectedMixFormat && (
+                    <strong className="hookah-required-note">
+                      Без формата подачи заказ сохранить нельзя.
                     </strong>
                   )}
                 </div>

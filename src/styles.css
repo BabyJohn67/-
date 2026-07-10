@@ -863,6 +863,7 @@ h2 {
 }
 
 .active-mix-item,
+.active-mix-format,
 .active-mix-comment,
 .empty-active-mix {
   border: 1px solid rgba(242, 207, 131, 0.14);
@@ -872,6 +873,7 @@ h2 {
 }
 
 .active-mix-item span,
+.active-mix-format span,
 .active-mix-comment span {
   color: var(--gold-soft);
   font-size: 12px;
@@ -887,9 +889,21 @@ h2 {
 }
 
 .active-mix-item small,
+.active-mix-format small,
 .empty-active-mix {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.active-mix-format {
+  margin-bottom: 14px;
+}
+
+.active-mix-format strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff6e4;
+  font-size: 20px;
 }
 
 .active-mix-comment {
@@ -1468,6 +1482,7 @@ h2 {
 }
 
 .master-tabs button,
+.master-format-group button,
 .hookah-number-picker button {
   min-height: 48px;
   border: 1px solid rgba(242, 207, 131, 0.18);
@@ -1479,6 +1494,7 @@ h2 {
 }
 
 .master-tabs button.is-active,
+.master-format-group button.is-active,
 .hookah-number-picker button.is-active {
   color: #171007;
   border-color: transparent;
@@ -1630,6 +1646,53 @@ h2 {
   color: var(--muted);
   background: rgba(217, 170, 69, 0.08);
   font-weight: 900;
+}
+
+.master-format-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(242, 207, 131, 0.2);
+  border-radius: 8px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 900;
+}
+
+.master-format-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.master-format-group {
+  display: grid;
+  gap: 8px;
+}
+
+.master-format-group h5 {
+  margin: 0;
+  color: var(--gold-soft);
+  font-size: 14px;
+}
+
+.master-format-group > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.master-format-group button {
+  min-height: 64px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.master-format-group button small {
+  color: currentColor;
+  opacity: 0.78;
+  line-height: 1.3;
 }
 
 .hookah-number-heading {
@@ -1913,6 +1976,7 @@ h2 {
   line-height: 1.35;
 }
 
+.active-hookah-format,
 .active-hookah-comment,
 .active-hookah-empty {
   border: 1px solid rgba(242, 207, 131, 0.12);
@@ -1921,6 +1985,7 @@ h2 {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.active-hookah-format span,
 .active-hookah-comment span {
   color: var(--gold-soft);
   font-size: 12px;
@@ -1928,10 +1993,17 @@ h2 {
   text-transform: uppercase;
 }
 
+.active-hookah-format small,
 .active-hookah-comment p,
 .active-hookah-empty {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.active-hookah-format strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff6e4;
 }
 
 .qr-hookah-grid {
@@ -2405,6 +2477,10 @@ h2 {
   }
 
   .hookah-number-picker > div {
+    grid-template-columns: 1fr;
+  }
+
+  .master-format-group > div {
     grid-template-columns: 1fr;
   }
 
