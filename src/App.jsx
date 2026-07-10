@@ -46,17 +46,23 @@ const HOOKAH_FORMATS = [
   {
     id: 'classic',
     title: 'Классический',
-    description: 'Стандартная забивка на чаше. Быстрый и понятный вариант на каждый день.'
+    description: 'Классическая забивка на чаше. Универсальный вариант для любого вкуса.',
+    priceLabel: 'Стандартная подача',
+    image: null
   },
   {
     id: 'fruit',
     title: 'На фрукте',
-    description: 'Подача на фрукте: ярче, сочнее и эффектнее. Конкретный фрукт уточнит мастер.'
+    description: 'Более яркая и сочная подача на фрукте. Конкретный фрукт можно выбрать ниже.',
+    priceLabel: 'С доплатой',
+    image: null
   },
   {
     id: 'signature',
     title: 'Авторский',
-    description: 'Особая подача от мастера с красивым оформлением и необычной идеей.'
+    description: 'Особая подача от мастера с необычным оформлением и эффектной подачей.',
+    priceLabel: 'Уточнить у мастера',
+    image: null
   }
 ];
 
@@ -714,7 +720,9 @@ export default function App() {
   }
 
   function prepareChoiceRequest() {
-    const formatText = selectedFormat ? selectedFormat.title : 'формат не выбран';
+    const formatText = selectedFormat
+      ? `${selectedFormat.title} (${selectedFormat.priceLabel})`
+      : 'формат не выбран';
     const choiceText = choiceItems.length > 0
       ? choiceItems.map((item, index) => `${index + 1}. ${item.brand} ${item.name} - ${item.taste}`).join('\n')
       : 'гость пока не выбрал конкретные табаки';
@@ -1354,7 +1362,14 @@ export default function App() {
                 type="button"
                 onClick={() => setSelectedFormatId(format.id)}
               >
-                <span className="hookah-format-photo">Фото скоро</span>
+                <span className="hookah-format-media">
+                  {format.image ? (
+                    <img src={format.image} alt={format.title} />
+                  ) : (
+                    <span className="hookah-format-photo">Фото скоро</span>
+                  )}
+                  <span className="hookah-format-price">{format.priceLabel}</span>
+                </span>
                 <span className="hookah-format-copy">
                   <strong>{format.title}</strong>
                   <small>{format.description}</small>
@@ -1514,6 +1529,7 @@ export default function App() {
           <div className="choice-format-summary">
             <span>Формат кальяна</span>
             <strong>{selectedFormat ? selectedFormat.title : 'Пока не выбран'}</strong>
+            {selectedFormat && <small>{selectedFormat.priceLabel}</small>}
           </div>
 
           {choiceItems.length === 0 ? (
