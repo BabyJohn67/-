@@ -47,22 +47,71 @@ const HOOKAH_FORMATS = [
     id: 'classic',
     title: 'Классический',
     description: 'Классическая забивка на чаше. Универсальный вариант для любого вкуса.',
-    priceLabel: 'Стандартная подача',
-    image: null
+    variants: [
+      {
+        id: 'classic-bowl',
+        title: 'Классическая чаша',
+        description: 'Стандартная подача на чаше. Хороший вариант, если хочется просто вкусный кальян без дополнительных эффектов.',
+        priceLabel: 'Стандартная цена',
+        image: null
+      }
+    ]
   },
   {
     id: 'fruit',
     title: 'На фрукте',
-    description: 'Более яркая и сочная подача на фрукте. Конкретный фрукт можно выбрать ниже.',
-    priceLabel: 'С доплатой',
-    image: null
+    description: 'Эффектная и сочная подача на фрукте.',
+    variants: [
+      {
+        id: 'fruit-mix',
+        title: 'Фруктовый микс',
+        description: 'Яркая подача на фрукте с насыщенным вкусом и сочной ароматикой.',
+        priceLabel: 'С доплатой',
+        image: null
+      },
+      {
+        id: 'fruit-citrus',
+        title: 'Цитрусовая подача',
+        description: 'Свежий и выразительный вариант на фрукте. Хорошо подходит для кислых и свежих вкусов.',
+        priceLabel: 'С доплатой',
+        image: null
+      },
+      {
+        id: 'fruit-premium',
+        title: 'Премиум фрукт',
+        description: 'Более эффектная подача на крупном фрукте. Конкретный фрукт уточнит мастер.',
+        priceLabel: 'Уточнить у мастера',
+        image: null
+      }
+    ]
   },
   {
     id: 'signature',
     title: 'Авторский',
-    description: 'Особая подача от мастера с необычным оформлением и эффектной подачей.',
-    priceLabel: 'Уточнить у мастера',
-    image: null
+    description: 'Особая подача от мастера с необычным оформлением.',
+    variants: [
+      {
+        id: 'signature-light',
+        title: 'Авторский Light',
+        description: 'Аккуратная авторская подача без перегруза. Подойдет для спокойного вечера.',
+        priceLabel: 'Уточнить у мастера',
+        image: null
+      },
+      {
+        id: 'signature-show',
+        title: 'Авторский Show',
+        description: 'Более эффектная подача с красивым оформлением и необычной идеей.',
+        priceLabel: 'Уточнить у мастера',
+        image: null
+      },
+      {
+        id: 'signature-premium',
+        title: 'Авторский Premium',
+        description: 'Максимально яркая подача от мастера для тех, кто хочет что-то особенное.',
+        priceLabel: 'Уточнить у мастера',
+        image: null
+      }
+    ]
   }
 ];
 
@@ -215,10 +264,23 @@ function loadStoredChoice() {
   }
 }
 
+function findFormatSelection(selectionId) {
+  for (const format of HOOKAH_FORMATS) {
+    const variant = format.variants.find((item) => item.id === selectionId);
+    if (variant) return { format, variant };
+
+    if (format.id === selectionId && format.variants[0]) {
+      return { format, variant: format.variants[0] };
+    }
+  }
+
+  return null;
+}
+
 function loadStoredFormat() {
   try {
     const storedFormat = localStorage.getItem(FORMAT_STORAGE_KEY);
-    return HOOKAH_FORMATS.some((format) => format.id === storedFormat) ? storedFormat : '';
+    return findFormatSelection(storedFormat)?.variant.id || '';
   } catch {
     return '';
   }
@@ -368,6 +430,7 @@ export default function App() {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [selectedStrength, setSelectedStrength] = useState('any');
   const [selectedFormatId, setSelectedFormatId] = useState(() => loadStoredFormat());
+  const [expandedFormatId, setExpandedFormatId] = useState('');
   const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
   const [guestComment, setGuestComment] = useState('');
   const [preparedRequest, setPreparedRequest] = useState(null);
@@ -519,7 +582,7 @@ export default function App() {
   }, [isMaster]);
 
   const choiceIds = useMemo(() => new Set(choiceItems.map((item) => item.id)), [choiceItems]);
-  const selectedFormat = HOOKAH_FORMATS.find((format) => format.id === selectedFormatId) || null;
+  const selectedFormat = findFormatSelection(selectedFormatId);
 
   const selectedCategories = TASTE_CATEGORIES.filter((category) =>
     selectedCategoryIds.includes(category.id)
@@ -721,7 +784,7 @@ export default function App() {
 
   function prepareChoiceRequest() {
     const formatText = selectedFormat
-      ? `${selectedFormat.title} (${selectedFormat.priceLabel})`
+      ? `${selectedFormat.format.title} — ${selectedFormat.variant.title} (${selectedFormat.variant.priceLabel})`
       : 'формат не выбран';
     const choiceText = choiceItems.length > 0
       ? choiceItems.map((item, index) => `${index + 1}. ${item.brand} ${item.name} - ${item.taste}`).join('\n')
@@ -1353,29 +1416,60 @@ export default function App() {
 
         <div className="hookah-format-grid">
           {HOOKAH_FORMATS.map((format) => {
-            const isSelected = selectedFormatId === format.id;
+            const isExpanded = expandedFormatId === format.id;
+            const selectedVariant = format.variants.find((variant) => variant.id === selectedFormatId);
 
             return (
-              <button
-                className={`hookah-format-card${isSelected ? ' is-selected' : ''}`}
+              <article
+                className={`hookah-format-card${selectedVariant ? ' is-selected' : ''}${isExpanded ? ' is-expanded' : ''}`}
                 key={format.id}
-                type="button"
-                onClick={() => setSelectedFormatId(format.id)}
               >
-                <span className="hookah-format-media">
-                  {format.image ? (
-                    <img src={format.image} alt={format.title} />
-                  ) : (
-                    <span className="hookah-format-photo">Фото скоро</span>
-                  )}
-                  <span className="hookah-format-price">{format.priceLabel}</span>
-                </span>
-                <span className="hookah-format-copy">
-                  <strong>{format.title}</strong>
-                  <small>{format.description}</small>
-                </span>
-                <span className="hookah-format-action">{isSelected ? 'Выбрано' : 'Выбрать'}</span>
-              </button>
+                <div className="hookah-format-summary">
+                  <div className="hookah-format-copy">
+                    <strong>{format.title}</strong>
+                    <small>{format.description}</small>
+                  </div>
+                  <button
+                    className="hookah-format-toggle"
+                    type="button"
+                    onClick={() => setExpandedFormatId(isExpanded ? '' : format.id)}
+                  >
+                    {isExpanded ? 'Скрыть' : 'Подробнее'}
+                  </button>
+                </div>
+
+                <div className={`hookah-format-variants${isExpanded ? ' is-open' : ''}`}>
+                  <div className="hookah-format-variant-grid">
+                    {format.variants.map((variant) => {
+                      const isSelected = selectedFormatId === variant.id;
+
+                      return (
+                        <article className={`hookah-format-variant${isSelected ? ' is-selected' : ''}`} key={variant.id}>
+                          <span className="hookah-format-media">
+                            {variant.image ? (
+                              <img src={variant.image} alt={variant.title} />
+                            ) : (
+                              <span className="hookah-format-photo">Фото скоро</span>
+                            )}
+                            <span className="hookah-format-price">{variant.priceLabel}</span>
+                          </span>
+                          <span className="hookah-format-variant-copy">
+                            <strong>{variant.title}</strong>
+                            <small>{variant.description}</small>
+                          </span>
+                          <button
+                            className="hookah-format-action"
+                            type="button"
+                            onClick={() => setSelectedFormatId(variant.id)}
+                          >
+                            {isSelected ? 'Выбрано' : 'Выбрать'}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </article>
             );
           })}
         </div>
@@ -1528,8 +1622,12 @@ export default function App() {
 
           <div className="choice-format-summary">
             <span>Формат кальяна</span>
-            <strong>{selectedFormat ? selectedFormat.title : 'Пока не выбран'}</strong>
-            {selectedFormat && <small>{selectedFormat.priceLabel}</small>}
+            <strong>
+              {selectedFormat
+                ? `${selectedFormat.format.title} — ${selectedFormat.variant.title}`
+                : 'Пока не выбран'}
+            </strong>
+            {selectedFormat && <small>{selectedFormat.variant.priceLabel}</small>}
           </div>
 
           {choiceItems.length === 0 ? (
