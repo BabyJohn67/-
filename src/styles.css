@@ -2488,6 +2488,11 @@ h2 {
     flex-direction: column;
   }
 
+  .hookah-format-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .hookah-format-toggle,
   .hookah-format-action {
     width: 100%;

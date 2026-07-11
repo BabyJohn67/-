@@ -3,70 +3,70 @@ import classicHookahImage from '../assets/hookahs/classic-hookah.png';
 export const hookahFormats = [
   {
     id: 'classic',
-    title: 'Классический',
-    description: 'Классическая забивка на чаше. Универсальный вариант для любого вкуса.',
+    title: 'Обычный кальян',
+    description: 'Универсальная подача на чаше для любого вкуса.',
     variants: [
       {
         id: 'classic-bowl',
-        title: 'Классическая чаша',
-        description: 'Стандартная подача на чаше. Хороший вариант, если хочется просто вкусный кальян без дополнительных эффектов.',
-        priceLabel: 'Стандартная цена',
+        title: 'Авторский',
+        description: 'Сбалансированная забивка от мастера на классической чаше.',
+        priceLabel: '3 500 ₽',
         image: classicHookahImage
       }
     ]
   },
   {
     id: 'fruit',
-    title: 'На фрукте',
-    description: 'Эффектная и сочная подача на фрукте.',
+    title: 'Кальяны на фрукте',
+    description: 'Сочная подача на фрукте с более ярким вкусом.',
     variants: [
       {
         id: 'fruit-mix',
-        title: 'Фруктовый микс',
-        description: 'Яркая подача на фрукте с насыщенным вкусом и сочной ароматикой.',
-        priceLabel: 'С доплатой',
+        title: 'На грейпфруте',
+        description: 'Свежая цитрусовая подача на грейпфруте.',
+        priceLabel: '4 000 ₽',
         image: null
       },
       {
         id: 'citrus-fruit',
-        title: 'Цитрусовая подача',
-        description: 'Свежий и выразительный вариант на фрукте. Хорошо подходит для кислых и свежих вкусов.',
-        priceLabel: 'С доплатой',
+        title: 'На гранате',
+        description: 'Насыщенная подача на гранате с выразительным вкусом.',
+        priceLabel: '4 200 ₽',
         image: null
       },
       {
         id: 'premium-fruit',
-        title: 'Премиум фрукт',
-        description: 'Более эффектная подача на крупном фрукте. Конкретный фрукт уточнит мастер.',
-        priceLabel: 'Уточнить у мастера',
+        title: 'На ананасе',
+        description: 'Эффектная подача на ананасе для яркого вечера.',
+        priceLabel: '4 500 ₽',
         image: null
       }
     ]
   },
   {
     id: 'signature',
-    title: 'Авторский',
-    description: 'Особая подача от мастера с необычным оформлением.',
+    title: 'Особые авторские кальяны',
+    description: 'Премиальные авторские подачи с необычной идеей и оформлением.',
     variants: [
       {
         id: 'signature-light',
-        title: 'Авторский Light',
-        description: 'Аккуратная авторская подача без перегруза. Подойдет для спокойного вечера.',
-        priceLabel: 'Уточнить у мастера',
+        title: 'Азия',
+        description: 'Особая авторская подача в восточном стиле.',
+        priceLabel: '6 000 ₽',
         image: null
       },
       {
         id: 'signature-show',
-        title: 'Авторский Show',
-        description: 'Более эффектная подача с красивым оформлением и необычной идеей.',
-        priceLabel: 'Уточнить у мастера',
+        title: 'Охотник',
+        description: 'Брутальная авторская подача с характером.',
+        priceLabel: '5 500 ₽',
         image: null
       },
       {
         id: 'signature-premium',
-        title: 'Авторский Premium',
-        description: 'Максимально яркая подача от мастера для тех, кто хочет что-то особенное.',
-        priceLabel: 'Уточнить у мастера',
+        title: 'Изнанка',
+        description: 'Максимально эффектная подача для особого впечатления.',
+        priceLabel: '10 000 ₽',
         image: null
       }
     ]
