@@ -1726,7 +1726,22 @@ h2 {
 
 .hookah-number-picker button {
   min-height: 58px;
-  padding: 0 12px;
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  padding: 10px 12px;
+}
+
+.hookah-number-picker button strong {
+  color: currentColor;
+  font-size: 15px;
+}
+
+.hookah-number-picker button small {
+  color: currentColor;
+  font-size: 12px;
+  line-height: 1.2;
+  opacity: 0.78;
 }
 
 .hookah-required-note {
@@ -1913,6 +1928,20 @@ h2 {
   margin-top: 5px;
   color: #fff6e4;
   font-size: 22px;
+}
+
+.hookah-unit-kind {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 7px;
+  border: 1px solid rgba(242, 207, 131, 0.26);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--gold-soft);
+  background: rgba(217, 170, 69, 0.1);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
 .active-hookah-status {
