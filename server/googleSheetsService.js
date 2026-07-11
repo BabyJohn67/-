@@ -146,6 +146,7 @@ async function ensureActiveMixesSheet() {
   await formatActiveMixesSheet(sheets, sheetId);
   await repairShiftedActiveMixRows(sheets, sheetName);
   await archiveSupersededActiveMixRows(sheets, sheetName);
+  await archiveInactiveActiveMixRows(sheets, sheetName);
   await syncReadableActiveMixRows(sheets, sheetName);
 }
 
@@ -480,6 +481,27 @@ async function archiveSupersededActiveMixRows(sheets, sheetName) {
     status: 'Заменен'
   })));
   await deleteActiveMixRows(sheets, sheetName, rowsToArchive.map((item) => item.rowNumber));
+}
+
+async function archiveInactiveActiveMixRows(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:N`
+  });
+  const inactiveRows = (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => normalizeActiveMixFromRow(row, rowNumber))
+    .filter((item) => item && !item.isActive);
+
+  if (inactiveRows.length === 0) return;
+
+  await appendMixHistoryRecords(inactiveRows.map(({ mix }) => ({
+    ...mix,
+    closedAt: mix.updatedAt || mix.createdAt || new Date().toISOString(),
+    status: 'Снят'
+  })));
+  await deleteActiveMixRows(sheets, sheetName, inactiveRows.map((item) => item.rowNumber));
 }
 
 async function syncReadableActiveMixRows(sheets, sheetName) {
@@ -1126,6 +1148,7 @@ export async function readAllActiveMixesFromGoogleApi() {
 }
 
 export async function readMixHistoryFromGoogleApi() {
+  await getActiveMixRows();
   await ensureMixHistorySheet();
 
   const sheets = getSheetsClient();
@@ -1139,16 +1162,7 @@ export async function readMixHistoryFromGoogleApi() {
     .map(({ row, rowNumber }) => normalizeMixHistoryFromRow(row, rowNumber))
     .filter(Boolean);
 
-  const legacyInactiveRows = (await getActiveMixRows())
-    .filter((item) => !item.isActive)
-    .map(({ mix, rowNumber }) => ({
-      ...mix,
-      rowNumber,
-      closedAt: mix.updatedAt || mix.createdAt || '',
-      status: 'Снят'
-    }));
-
-  return [...historyRows, ...legacyInactiveRows].sort((left, right) => {
+  return historyRows.sort((left, right) => {
     const leftDate = new Date(left.closedAt || left.createdAt).getTime() || 0;
     const rightDate = new Date(right.closedAt || right.createdAt).getTime() || 0;
     return rightDate - leftDate;
