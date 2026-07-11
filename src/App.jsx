@@ -383,6 +383,7 @@ export default function App() {
   const [selectedStrength, setSelectedStrength] = useState('any');
   const [selectedFormatId, setSelectedFormatId] = useState(() => loadStoredFormat());
   const [expandedFormatId, setExpandedFormatId] = useState('');
+  const [failedFormatImages, setFailedFormatImages] = useState({});
   const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
   const [guestComment, setGuestComment] = useState('');
   const [preparedRequest, setPreparedRequest] = useState(null);
@@ -1479,12 +1480,20 @@ export default function App() {
                   <div className="hookah-format-variant-grid">
                     {format.variants.map((variant) => {
                       const isSelected = selectedFormatId === variant.id;
+                      const shouldShowImage = variant.image && !failedFormatImages[variant.id];
 
                       return (
                         <article className={`hookah-format-variant${isSelected ? ' is-selected' : ''}`} key={variant.id}>
                           <span className="hookah-format-media">
-                            {variant.image ? (
-                              <img src={variant.image} alt={variant.title} />
+                            {shouldShowImage ? (
+                              <img
+                                src={variant.image}
+                                alt={variant.title}
+                                onError={() => setFailedFormatImages((current) => ({
+                                  ...current,
+                                  [variant.id]: true
+                                }))}
+                              />
                             ) : (
                               <span className="hookah-format-photo">Фото скоро</span>
                             )}

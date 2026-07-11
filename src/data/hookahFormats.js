@@ -1,3 +1,5 @@
+import classicHookahImage from '../assets/hookahs/classic-hookah.png';
+
 export const hookahFormats = [
   {
     id: 'classic',
@@ -9,7 +11,7 @@ export const hookahFormats = [
         title: 'Классическая чаша',
         description: 'Стандартная подача на чаше. Хороший вариант, если хочется просто вкусный кальян без дополнительных эффектов.',
         priceLabel: 'Стандартная цена',
-        image: null
+        image: classicHookahImage
       }
     ]
   },
