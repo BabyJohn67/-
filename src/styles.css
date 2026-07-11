@@ -540,15 +540,17 @@ h2 {
 .hookah-format-media {
   position: relative;
   display: block;
-  min-height: 164px;
+  min-height: 220px;
   border: 1px solid rgba(242, 207, 131, 0.38);
   border-radius: 8px;
-  background: #0f0d09;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(242, 207, 131, 0.14), transparent 45%),
+    #0f0d09;
   overflow: hidden;
 }
 
 .hookah-format-photo {
-  min-height: 164px;
+  min-height: 220px;
   display: grid;
   place-items: center;
   color: var(--gold-soft);
@@ -561,9 +563,9 @@ h2 {
 
 .hookah-format-media img {
   width: 100%;
-  height: 164px;
+  height: 220px;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .hookah-format-price {
