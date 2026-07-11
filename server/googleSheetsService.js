@@ -175,6 +175,7 @@ async function ensureMixHistorySheet() {
   }
 
   await formatMixHistorySheet(sheets, sheetId);
+  await repairMixHistoryRows(sheets, sheetName);
 }
 
 function normalizeHeader(value) {
@@ -381,6 +382,22 @@ function buildReadableMixHistoryCells(record) {
   ];
 }
 
+function buildMixHistoryStorageRow(record) {
+  return [
+    record.hookahId,
+    record.id,
+    JSON.stringify({
+      tobaccos: record.tobaccos || [],
+      format: record.format || null
+    }),
+    record.comment || '',
+    record.createdAt,
+    record.closedAt,
+    record.status,
+    ...buildReadableMixHistoryCells(record)
+  ];
+}
+
 function normalizeMixItems(value) {
   if (Array.isArray(value)) {
     return {
@@ -442,6 +459,71 @@ async function repairShiftedActiveMixRows(sheets, sheetName) {
       data: updates
     }
   });
+}
+
+function normalizePossiblyShiftedMixHistoryRow(row, rowNumber) {
+  const direct = normalizeMixHistoryFromRow(row, rowNumber);
+  if (direct) return direct;
+
+  const shifted = normalizeMixHistoryFromRow(row.slice(1), rowNumber);
+  if (shifted) return shifted;
+
+  return null;
+}
+
+async function repairMixHistoryRows(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:N`
+  });
+  const updates = (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => {
+      const normalized = normalizePossiblyShiftedMixHistoryRow(row, rowNumber);
+      if (!normalized) return null;
+
+      const expected = buildMixHistoryStorageRow(normalized);
+      const current = row.slice(0, MIX_HISTORY_HEADERS.length);
+      if (cellsAreEqual(current, expected)) return null;
+
+      return {
+        range: `${sheetName}!A${rowNumber}:N${rowNumber}`,
+        values: [[...expected, '']]
+      };
+    })
+    .filter(Boolean);
+
+  if (updates.length === 0) return;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: updates
+    }
+  });
+}
+
+function isSameMixHistoryRecord(left, right) {
+  return (
+    String(left.hookahId || '') === String(right.hookahId || '') &&
+    String(left.id || '') === String(right.id || '') &&
+    String(left.closedAt || '') === String(right.closedAt || '')
+  );
+}
+
+async function getExistingMixHistoryRecords(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:N`
+  });
+
+  return (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => normalizePossiblyShiftedMixHistoryRow(row, rowNumber))
+    .filter(Boolean);
 }
 
 async function archiveSupersededActiveMixRows(sheets, sheetName) {
@@ -934,19 +1016,12 @@ async function appendMixHistoryRecords(records) {
 
   const sheets = getSheetsClient();
   const sheetName = getMixHistorySheetName();
-  const values = normalizedRecords.map((record) => [
-    record.hookahId,
-    record.id,
-    JSON.stringify({
-      tobaccos: record.tobaccos || [],
-      format: record.format || null
-    }),
-    record.comment || '',
-    record.createdAt,
-    record.closedAt,
-    record.status,
-    ...buildReadableMixHistoryCells(record)
-  ]);
+  const existingRecords = await getExistingMixHistoryRecords(sheets, sheetName);
+  const values = normalizedRecords
+    .filter((record) => !existingRecords.some((existing) => isSameMixHistoryRecord(existing, record)))
+    .map(buildMixHistoryStorageRow);
+
+  if (values.length === 0) return;
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: getSheetId(),
