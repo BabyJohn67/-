@@ -147,6 +147,7 @@ async function ensureActiveMixesSheet() {
   await repairShiftedActiveMixRows(sheets, sheetName);
   await archiveSupersededActiveMixRows(sheets, sheetName);
   await archiveInactiveActiveMixRows(sheets, sheetName);
+  await removeMalformedActiveMixRows(sheets, sheetName);
   await syncReadableActiveMixRows(sheets, sheetName);
 }
 
@@ -292,6 +293,20 @@ function repairReadablePartShiftedRight(row) {
     row[12] || '',
     row[13] || ''
   ];
+}
+
+function parseHookahIdFromReadableLabel(value) {
+  const match = String(value || '').match(/кальян\s*№?\s*(\d+)/i);
+  return match ? match[1] : '';
+}
+
+function getReadableActiveMixHookahId(row) {
+  return parseHookahIdFromReadableLabel(row[7]) || parseHookahIdFromReadableLabel(row[8]);
+}
+
+function looksLikeReadableActiveMixRow(row) {
+  const status = String(row[8] || row[9] || '').trim().toLowerCase();
+  return Boolean(getReadableActiveMixHookahId(row) && ['активен', 'микс назначен'].includes(status));
 }
 
 async function getSheetTabId(sheetName) {
@@ -584,6 +599,31 @@ async function archiveInactiveActiveMixRows(sheets, sheetName) {
     status: 'Снят'
   })));
   await deleteActiveMixRows(sheets, sheetName, inactiveRows.map((item) => item.rowNumber));
+}
+
+async function removeMalformedActiveMixRows(sheets, sheetName) {
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:N`
+  });
+  const rows = (result.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1);
+  const normalizedRows = rows
+    .map(({ row, rowNumber }) => normalizeActiveMixFromRow(row, rowNumber))
+    .filter((item) => item?.isActive);
+  const activeHookahIds = new Set(normalizedRows.map((item) => String(item.mix.hookahId)));
+  const malformedDuplicateRows = rows
+    .filter(({ row, rowNumber }) => {
+      if (normalizeActiveMixFromRow(row, rowNumber)) return false;
+      const readableHookahId = getReadableActiveMixHookahId(row);
+      return readableHookahId && activeHookahIds.has(readableHookahId) && looksLikeReadableActiveMixRow(row);
+    })
+    .map((item) => item.rowNumber);
+
+  if (malformedDuplicateRows.length === 0) return;
+
+  await deleteActiveMixRows(sheets, sheetName, malformedDuplicateRows);
 }
 
 async function syncReadableActiveMixRows(sheets, sheetName) {
