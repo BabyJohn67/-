@@ -594,21 +594,19 @@ h2 {
 }
 
 .hookah-format-price {
-  position: absolute;
-  z-index: 2;
-  right: 10px;
-  bottom: 10px;
   min-height: 34px;
   display: inline-flex;
+  width: fit-content;
   align-items: center;
   border: 1px solid rgba(242, 207, 131, 0.3);
   border-radius: 8px;
   padding: 0 10px;
   color: #171007;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold));
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
   font-size: 12px;
   font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .hookah-format-variant-copy {
@@ -625,6 +623,13 @@ h2 {
   color: #fff6e4;
   font-size: 18px;
   line-height: 1.18;
+}
+
+.hookah-format-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .hookah-format-variant-copy small {

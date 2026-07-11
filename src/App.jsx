@@ -1500,10 +1500,12 @@ export default function App() {
                             ) : (
                               <span className="hookah-format-photo">Фото скоро</span>
                             )}
-                            <span className="hookah-format-price">{variant.priceLabel}</span>
                           </span>
                           <span className="hookah-format-variant-copy">
-                            <strong>{variant.title}</strong>
+                            <span className="hookah-format-title-row">
+                              <strong>{variant.title}</strong>
+                              <span className="hookah-format-price">{variant.priceLabel}</span>
+                            </span>
                             <small>{variant.description}</small>
                           </span>
                           <button
