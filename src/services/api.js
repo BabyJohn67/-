@@ -93,6 +93,17 @@ export async function loadActiveMixes() {
   return data;
 }
 
+export async function loadMixHistory(period = '24h') {
+  const response = await fetch(`/api/hookahs/history?period=${encodeURIComponent(period)}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось загрузить историю кальянов');
+  }
+
+  return data;
+}
+
 export async function saveActiveMix(hookahId, mix, masterPin) {
   const response = await fetch(`/api/hookahs/${encodeURIComponent(hookahId)}/mix`, {
     method: 'PUT',

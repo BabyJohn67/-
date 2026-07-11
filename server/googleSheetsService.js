@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 const DEFAULT_SHEET_ID = '1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o';
 const DEFAULT_SHEET_NAME = 'Табаки';
 const DEFAULT_ACTIVE_MIXES_SHEET_NAME = 'Активные миксы';
+const DEFAULT_MIX_HISTORY_SHEET_NAME = 'История заказов';
 const GRAMS_PER_UNIT = 8.5;
 const ACTIVE_MIX_HEADERS = [
   'hookahId',
@@ -19,6 +20,21 @@ const ACTIVE_MIX_HEADERS = [
   'Создан',
   'Обновлен'
 ];
+const MIX_HISTORY_HEADERS = [
+  'hookahId',
+  'mixId',
+  'itemsJson',
+  'comment',
+  'createdAt',
+  'closedAt',
+  'status',
+  'Кальян',
+  'Статус',
+  'Состав микса',
+  'Комментарий мастера',
+  'Создан',
+  'Снят'
+];
 
 function getSheetId() {
   return process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
@@ -34,6 +50,10 @@ function getSheetGid() {
 
 function getActiveMixesSheetName() {
   return process.env.GOOGLE_ACTIVE_MIXES_SHEET_NAME || DEFAULT_ACTIVE_MIXES_SHEET_NAME;
+}
+
+function getMixHistorySheetName() {
+  return process.env.GOOGLE_MIX_HISTORY_SHEET_NAME || DEFAULT_MIX_HISTORY_SHEET_NAME;
 }
 
 function getPrivateKey() {
@@ -125,8 +145,35 @@ async function ensureActiveMixesSheet() {
 
   await formatActiveMixesSheet(sheets, sheetId);
   await repairShiftedActiveMixRows(sheets, sheetName);
-  await deactivateSupersededActiveMixRows(sheets, sheetName);
+  await archiveSupersededActiveMixRows(sheets, sheetName);
   await syncReadableActiveMixRows(sheets, sheetName);
+}
+
+async function ensureMixHistorySheet() {
+  const sheetName = getMixHistorySheetName();
+  await ensureSheetExists(sheetName, MIX_HISTORY_HEADERS);
+
+  const sheets = getSheetsClient();
+  const sheetId = await getSheetTabId(sheetName);
+  const values = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A1:M1`
+  });
+  const headers = (values.data.values?.[0] || []).map(normalizeHeader);
+  const isCurrentSchema = MIX_HISTORY_HEADERS.every((header, index) => headers[index] === normalizeHeader(header));
+
+  if (!isCurrentSchema) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: getSheetId(),
+      range: `${sheetName}!A1:M1`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [MIX_HISTORY_HEADERS]
+      }
+    });
+  }
+
+  await formatMixHistorySheet(sheets, sheetId);
 }
 
 function normalizeHeader(value) {
@@ -317,6 +364,22 @@ function buildReadableActiveMixCells(mix, isActive, updatedAt = mix.updatedAt) {
   ];
 }
 
+function buildReadableMixHistoryCells(record) {
+  const commentLines = [
+    formatMixFormatReadable(record.format),
+    String(record.comment || '')
+  ].filter(Boolean);
+
+  return [
+    formatHookahLabel(record.hookahId),
+    record.status || 'Снят',
+    formatTobaccosReadable(record.tobaccos),
+    commentLines.join('\n\n'),
+    formatDateCell(record.createdAt),
+    formatDateCell(record.closedAt || record.updatedAt || record.createdAt)
+  ];
+}
+
 function normalizeMixItems(value) {
   if (Array.isArray(value)) {
     return {
@@ -380,7 +443,7 @@ async function repairShiftedActiveMixRows(sheets, sheetName) {
   });
 }
 
-async function deactivateSupersededActiveMixRows(sheets, sheetName) {
+async function archiveSupersededActiveMixRows(sheets, sheetName) {
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
     range: `${sheetName}!A:N`
@@ -396,25 +459,27 @@ async function deactivateSupersededActiveMixRows(sheets, sheetName) {
       return groups;
     }, {});
 
-  const updatedAt = new Date().toISOString();
-  const updates = Object.values(activeRowsByHookah)
+  const closedAt = new Date().toISOString();
+  const rowsToArchive = Object.values(activeRowsByHookah)
     .flatMap((rows) => rows
       .sort((left, right) => left.rowNumber - right.rowNumber)
       .slice(0, -1)
       .map(({ rowNumber, mix }) => ({
-        range: `${sheetName}!F${rowNumber}:M${rowNumber}`,
-        values: [[updatedAt, 'FALSE', ...buildReadableActiveMixCells(mix, false, updatedAt)]]
+        rowNumber,
+        mix: {
+          ...mix,
+          updatedAt: closedAt
+        }
       })));
 
-  if (updates.length === 0) return;
+  if (rowsToArchive.length === 0) return;
 
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: getSheetId(),
-    requestBody: {
-      valueInputOption: 'RAW',
-      data: updates
-    }
-  });
+  await appendMixHistoryRecords(rowsToArchive.map(({ mix }) => ({
+    ...mix,
+    closedAt,
+    status: 'Заменен'
+  })));
+  await deleteActiveMixRows(sheets, sheetName, rowsToArchive.map((item) => item.rowNumber));
 }
 
 async function syncReadableActiveMixRows(sheets, sheetName) {
@@ -608,6 +673,120 @@ async function formatActiveMixesSheet(sheets, sheetId) {
   });
 }
 
+async function formatMixHistorySheet(sheets, sheetId) {
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              gridProperties: {
+                frozenRowCount: 1
+              }
+            },
+            fields: 'gridProperties.frozenRowCount'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: MIX_HISTORY_HEADERS.length
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.05, green: 0.05, blue: 0.05 },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
+                textFormat: {
+                  foregroundColor: { red: 0.95, green: 0.76, blue: 0.35 },
+                  bold: true
+                }
+              }
+            },
+            fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: 7,
+              endColumnIndex: MIX_HISTORY_HEADERS.length
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 0.98, blue: 0.92 },
+                horizontalAlignment: 'LEFT',
+                wrapStrategy: 'WRAP',
+                verticalAlignment: 'TOP',
+                textFormat: {
+                  foregroundColor: { red: 0.08, green: 0.07, blue: 0.05 },
+                  fontSize: 10
+                }
+              }
+            },
+            fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,wrapStrategy,verticalAlignment,textFormat)'
+          }
+        },
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId,
+              dimension: 'COLUMNS',
+              startIndex: 0,
+              endIndex: 7
+            },
+            properties: {
+              hiddenByUser: true
+            },
+            fields: 'hiddenByUser'
+          }
+        },
+        ...[
+          [7, 120],
+          [8, 110],
+          [9, 420],
+          [10, 260],
+          [11, 150],
+          [12, 150]
+        ].map(([index, pixelSize]) => ({
+          updateDimensionProperties: {
+            range: {
+              sheetId,
+              dimension: 'COLUMNS',
+              startIndex: index,
+              endIndex: index + 1
+            },
+            properties: {
+              pixelSize
+            },
+            fields: 'pixelSize'
+          }
+        })),
+        {
+          setBasicFilter: {
+            filter: {
+              range: {
+                sheetId,
+                startRowIndex: 0,
+                startColumnIndex: 0,
+                endColumnIndex: MIX_HISTORY_HEADERS.length
+              }
+            }
+          }
+        }
+      ]
+    }
+  });
+}
+
 function normalizeActiveMixFromRow(row, rowNumber) {
   if (isShiftedActiveMixRow(row)) {
     const shifted = row.slice(1, 14);
@@ -670,25 +849,110 @@ async function getActiveMixRows() {
     .filter(Boolean);
 }
 
-async function deactivateActiveMixRows(sheets, rows, hookahId, updatedAt) {
+async function deactivateActiveMixRows(sheets, rows, hookahId, updatedAt, status = 'Заменен') {
   const activeMatches = rows.filter(
     (item) => item.isActive && String(item.mix.hookahId) === String(hookahId)
   );
 
-  await Promise.all(
-    activeMatches.map(({ rowNumber, mix }) =>
-      sheets.spreadsheets.values.update({
-        spreadsheetId: getSheetId(),
-        range: `${getActiveMixesSheetName()}!F${rowNumber}:M${rowNumber}`,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [[updatedAt, 'FALSE', ...buildReadableActiveMixCells(mix, false, updatedAt)]]
-        }
-      })
-    )
-  );
+  await appendMixHistoryRecords(activeMatches.map(({ mix }) => ({
+    ...mix,
+    updatedAt,
+    closedAt: updatedAt,
+    status
+  })));
+  await deleteActiveMixRows(sheets, getActiveMixesSheetName(), activeMatches.map((item) => item.rowNumber));
 
   return activeMatches.length;
+}
+
+async function deleteActiveMixRows(sheets, sheetName, rowNumbers) {
+  if (rowNumbers.length === 0) return;
+
+  const sheetId = await getSheetTabId(sheetName);
+  const requests = [...rowNumbers]
+    .sort((left, right) => right - left)
+    .map((rowNumber) => ({
+      deleteDimension: {
+        range: {
+          sheetId,
+          dimension: 'ROWS',
+          startIndex: rowNumber - 1,
+          endIndex: rowNumber
+        }
+      }
+    }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      requests
+    }
+  });
+}
+
+async function appendMixHistoryRecords(records) {
+  const normalizedRecords = records
+    .filter(Boolean)
+    .map((record) => ({
+      ...record,
+      hookahId: String(record.hookahId || ''),
+      id: String(record.id || record.mixId || `mix-${record.hookahId}-${Date.now()}`),
+      tobaccos: Array.isArray(record.tobaccos) ? record.tobaccos : [],
+      format: record.format || null,
+      comment: String(record.comment || ''),
+      createdAt: String(record.createdAt || ''),
+      closedAt: String(record.closedAt || record.updatedAt || new Date().toISOString()),
+      status: String(record.status || 'Снят')
+    }))
+    .filter((record) => record.hookahId);
+
+  if (normalizedRecords.length === 0) return;
+
+  await ensureMixHistorySheet();
+
+  const sheets = getSheetsClient();
+  const sheetName = getMixHistorySheetName();
+  const values = normalizedRecords.map((record) => [
+    record.hookahId,
+    record.id,
+    JSON.stringify({
+      tobaccos: record.tobaccos || [],
+      format: record.format || null
+    }),
+    record.comment || '',
+    record.createdAt,
+    record.closedAt,
+    record.status,
+    ...buildReadableMixHistoryCells(record)
+  ]);
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A:M`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values
+    }
+  });
+}
+
+function normalizeMixHistoryFromRow(row, rowNumber) {
+  const hookahId = String(row[0] || '').trim();
+  if (!hookahId) return null;
+
+  const items = normalizeMixItems(parseJsonCell(row[2]));
+  return {
+    rowNumber,
+    hookahId,
+    id: String(row[1] || `history-${hookahId}-${rowNumber}`),
+    tobaccos: items.tobaccos,
+    format: items.format,
+    comment: String(row[3] || ''),
+    createdAt: String(row[4] || ''),
+    closedAt: String(row[5] || row[4] || ''),
+    status: String(row[6] || 'Снят')
+  };
 }
 
 function buildTobacco(row, rowIndex, nameIndex, quantityIndex, tasteIndex, layout) {
@@ -861,6 +1125,36 @@ export async function readAllActiveMixesFromGoogleApi() {
   }, {});
 }
 
+export async function readMixHistoryFromGoogleApi() {
+  await ensureMixHistorySheet();
+
+  const sheets = getSheetsClient();
+  const historyResult = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${getMixHistorySheetName()}!A:M`
+  });
+  const historyRows = (historyResult.data.values || [])
+    .map((row, index) => ({ row, rowNumber: index + 1 }))
+    .slice(1)
+    .map(({ row, rowNumber }) => normalizeMixHistoryFromRow(row, rowNumber))
+    .filter(Boolean);
+
+  const legacyInactiveRows = (await getActiveMixRows())
+    .filter((item) => !item.isActive)
+    .map(({ mix, rowNumber }) => ({
+      ...mix,
+      rowNumber,
+      closedAt: mix.updatedAt || mix.createdAt || '',
+      status: 'Снят'
+    }));
+
+  return [...historyRows, ...legacyInactiveRows].sort((left, right) => {
+    const leftDate = new Date(left.closedAt || left.createdAt).getTime() || 0;
+    const rightDate = new Date(right.closedAt || right.createdAt).getTime() || 0;
+    return rightDate - leftDate;
+  });
+}
+
 export async function saveActiveMixToGoogleApi(mix) {
   const updatedAt = new Date().toISOString();
   const sheets = getSheetsClient();
@@ -908,7 +1202,7 @@ export async function clearActiveMixFromGoogleApi(hookahId) {
   const updatedAt = new Date().toISOString();
   const sheets = getSheetsClient();
   const rows = await getActiveMixRows();
-  const cleared = await deactivateActiveMixRows(sheets, rows, hookahId, updatedAt);
+  const cleared = await deactivateActiveMixRows(sheets, rows, hookahId, updatedAt, 'Снят');
 
   return {
     hookahId: String(hookahId),

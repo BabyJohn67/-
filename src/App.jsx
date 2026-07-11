@@ -30,6 +30,7 @@ import {
   loadActiveMixes,
   loadActiveMix,
   loadConfig,
+  loadMixHistory,
   loadTobaccos,
   saveActiveMix,
   saveTobaccoQuantity
@@ -42,6 +43,13 @@ const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
 const MASTER_LOGIN = 'master';
+const HISTORY_PERIODS = [
+  { id: '24h', label: '24 часа' },
+  { id: '3d', label: '3 дня' },
+  { id: 'week', label: 'Неделя' },
+  { id: 'month', label: 'Месяц' },
+  { id: 'all', label: 'Все время' }
+];
 const LEGACY_FORMAT_VARIANT_IDS = {
   'fruit-citrus': 'citrus-fruit',
   'fruit-premium': 'premium-fruit'
@@ -426,6 +434,10 @@ export default function App() {
   const [clearingHookahIds, setClearingHookahIds] = useState([]);
   const [pendingClearHookahId, setPendingClearHookahId] = useState('');
   const [activeMixStorage, setActiveMixStorage] = useState(null);
+  const [mixHistory, setMixHistory] = useState([]);
+  const [historyPeriod, setHistoryPeriod] = useState('24h');
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -464,6 +476,23 @@ export default function App() {
       setActiveHookahsError(loadError.message || 'Не удалось загрузить активные кальяны');
     } finally {
       setIsActiveHookahsLoading(false);
+    }
+  }
+
+  async function refreshMixHistory(period = historyPeriod) {
+    setIsHistoryLoading(true);
+    setHistoryError('');
+
+    try {
+      const data = await loadMixHistory(period);
+      setMixHistory(data.history || []);
+      if (data.storage) {
+        setActiveMixStorage(data.storage);
+      }
+    } catch (loadError) {
+      setHistoryError(loadError.message || 'Не удалось загрузить историю кальянов');
+    } finally {
+      setIsHistoryLoading(false);
     }
   }
 
@@ -522,6 +551,11 @@ export default function App() {
     if (!isMaster) return;
     refreshActiveHookahs();
   }, [isMaster]);
+
+  useEffect(() => {
+    if (!isMaster || masterTab !== 'history') return;
+    refreshMixHistory(historyPeriod);
+  }, [historyPeriod, isMaster, masterTab]);
 
   const choiceIds = useMemo(() => new Set(choiceItems.map((item) => item.id)), [choiceItems]);
   const selectedFormat = findFormatSelection(selectedFormatId);
@@ -1000,6 +1034,9 @@ export default function App() {
           comment: '',
           tobaccos: []
         }));
+      }
+      if (masterTab === 'history') {
+        refreshMixHistory(historyPeriod);
       }
       setCopiedLinkMessage(`Микс снят с кальяна №${hookahId}`);
       return true;
@@ -1847,6 +1884,7 @@ export default function App() {
               {[
                 ['order', 'Создать заказ'],
                 ['active', 'Активные кальяны'],
+                ['history', 'История заказов'],
                 ['stock', 'Остатки'],
                 ['qr', 'QR кальянов']
               ].map(([value, label]) => (
@@ -1980,6 +2018,97 @@ export default function App() {
                     );
                   })}
                 </div>
+              </section>
+            )}
+
+            {masterTab === 'history' && (
+              <section className="active-hookahs-panel mix-history-panel" aria-label="История заказов">
+                <div className="master-mix-heading">
+                  <div>
+                    <span className="eyebrow">Снятые кальяны</span>
+                    <h3>История заказов</h3>
+                  </div>
+                  <button
+                    className="ghost-button"
+                    disabled={isHistoryLoading}
+                    type="button"
+                    onClick={() => refreshMixHistory(historyPeriod)}
+                  >
+                    <RefreshCcw size={17} />
+                    {isHistoryLoading ? 'Обновляю' : 'Обновить'}
+                  </button>
+                </div>
+
+                <div className="history-filter-row" aria-label="Фильтр истории по времени">
+                  {HISTORY_PERIODS.map((period) => (
+                    <button
+                      className={historyPeriod === period.id ? 'is-active' : ''}
+                      key={period.id}
+                      type="button"
+                      onClick={() => setHistoryPeriod(period.id)}
+                    >
+                      {period.label}
+                    </button>
+                  ))}
+                </div>
+
+                {historyError && (
+                  <div className="error-banner" role="status">
+                    <div>
+                      <strong>Не удалось загрузить историю кальянов</strong>
+                      <span>{historyError}</span>
+                    </div>
+                    <button type="button" onClick={() => refreshMixHistory(historyPeriod)}>Повторить</button>
+                  </div>
+                )}
+
+                {mixHistory.length === 0 ? (
+                  <div className="active-hookah-empty">
+                    За выбранный период снятых кальянов пока нет.
+                  </div>
+                ) : (
+                  <div className="mix-history-list">
+                    {mixHistory.map((mix) => (
+                      <article className="active-hookah-card has-mix" key={`${mix.id}-${mix.closedAt || mix.updatedAt}`}>
+                        <div className="active-hookah-card-header">
+                          <div>
+                            <span className="active-hookah-status">{mix.status || 'Снят'}</span>
+                            <h4>Кальян №{mix.hookahId}</h4>
+                          </div>
+                          <span className="active-hookah-date">
+                            <CalendarClock size={15} />
+                            {formatMixDate(mix.closedAt || mix.updatedAt || mix.createdAt)}
+                          </span>
+                        </div>
+
+                        {mix.format && (
+                          <div className="active-hookah-format">
+                            <span>Формат</span>
+                            <strong>{mix.format.title} - {mix.format.variantTitle}</strong>
+                            <small>{mix.format.priceLabel}</small>
+                          </div>
+                        )}
+
+                        <div className="active-hookah-mix-list">
+                          {(mix.tobaccos || []).map((item) => (
+                            <div className="active-hookah-mix-item" key={`${mix.id}-${item.id}-${item.percent}`}>
+                              <strong>{item.brand} {item.name}</strong>
+                              <span>{item.percent}%</span>
+                              <small>{item.taste}</small>
+                            </div>
+                          ))}
+                        </div>
+
+                        {mix.comment && (
+                          <div className="active-hookah-comment">
+                            <span>Комментарий</span>
+                            <p>{mix.comment}</p>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 

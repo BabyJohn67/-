@@ -1476,7 +1476,7 @@ h2 {
 
 .master-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
@@ -1901,6 +1901,34 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.mix-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.history-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-filter-row button {
+  min-height: 42px;
+  border: 1px solid rgba(242, 207, 131, 0.18);
+  border-radius: 8px;
+  padding: 0 13px;
+  color: #f7ebd1;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.history-filter-row button.is-active {
+  color: #171007;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
 }
 
 .active-hookah-card {

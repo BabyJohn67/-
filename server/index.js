@@ -8,6 +8,7 @@ import {
   hasGoogleCredentials,
   readAllActiveMixesFromGoogleApi,
   readActiveMixFromGoogleApi,
+  readMixHistoryFromGoogleApi,
   readTobaccosFromGoogleApi,
   rowsToTobaccos as rowsToTobaccosFromSheet,
   saveActiveMixToGoogleApi,
@@ -49,6 +50,7 @@ const SHEET_GID = process.env.GOOGLE_SHEET_GID || '569579743';
 const MASTER_PIN = process.env.MASTER_PIN || '2580';
 const DATA_DIR = path.join(__dirname, 'data');
 const ACTIVE_MIXES_PATH = path.join(DATA_DIR, 'activeMixes.json');
+const MIX_HISTORY_PATH = path.join(DATA_DIR, 'mixHistory.json');
 
 app.use(express.json());
 
@@ -65,6 +67,53 @@ function readActiveMixes() {
 function writeActiveMixes(mixes) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(ACTIVE_MIXES_PATH, `${JSON.stringify(mixes, null, 2)}\n`);
+}
+
+function readMixHistory() {
+  if (!fs.existsSync(MIX_HISTORY_PATH)) return [];
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MIX_HISTORY_PATH, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMixHistory(history) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(MIX_HISTORY_PATH, `${JSON.stringify(history, null, 2)}\n`);
+}
+
+function appendMixHistory(mix, status, closedAt = new Date().toISOString()) {
+  if (!mix) return;
+
+  const history = readMixHistory();
+  history.push({
+    ...mix,
+    closedAt,
+    status
+  });
+  writeMixHistory(history);
+}
+
+function filterMixHistoryByPeriod(history, period) {
+  if (period === 'all') return history;
+
+  const now = Date.now();
+  const periodHours = {
+    '24h': 24,
+    '3d': 24 * 3,
+    week: 24 * 7,
+    month: 24 * 30
+  };
+  const hours = periodHours[period] || periodHours['24h'];
+  const border = now - hours * 60 * 60 * 1000;
+
+  return history.filter((item) => {
+    const timestamp = new Date(item.closedAt || item.updatedAt || item.createdAt).getTime();
+    return Number.isFinite(timestamp) && timestamp >= border;
+  });
 }
 
 function getActiveMixStorageInfo() {
@@ -181,6 +230,39 @@ app.get('/api/hookahs/active-mixes', (_request, response) => {
   });
 });
 
+app.get('/api/hookahs/history', (request, response) => {
+  const period = String(request.query.period || '24h');
+
+  if (hasGoogleCredentials()) {
+    readMixHistoryFromGoogleApi()
+      .then((history) => {
+        response.json({
+          period,
+          history: filterMixHistoryByPeriod(history, period),
+          storage: getActiveMixStorageInfo()
+        });
+      })
+      .catch((error) => {
+        response.status(500).json({
+          message: 'Не удалось загрузить историю кальянов',
+          details: error.message,
+          storage: getActiveMixStorageInfo()
+        });
+      });
+    return;
+  }
+
+  response.json({
+    period,
+    history: filterMixHistoryByPeriod(readMixHistory(), period).sort((left, right) => {
+      const leftDate = new Date(left.closedAt || left.updatedAt || left.createdAt).getTime() || 0;
+      const rightDate = new Date(right.closedAt || right.updatedAt || right.createdAt).getTime() || 0;
+      return rightDate - leftDate;
+    }),
+    storage: getActiveMixStorageInfo()
+  });
+});
+
 app.get('/api/hookahs/:hookahId/mix', (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
 
@@ -261,6 +343,9 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
   }
 
   const mixes = readActiveMixes();
+  if (mixes[hookahId]) {
+    appendMixHistory(mixes[hookahId], 'Заменен');
+  }
   mixes[hookahId] = mix;
   writeActiveMixes(mixes);
 
@@ -291,6 +376,9 @@ app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) =
   }
 
   const mixes = readActiveMixes();
+  if (mixes[hookahId]) {
+    appendMixHistory(mixes[hookahId], 'Снят');
+  }
   delete mixes[hookahId];
   writeActiveMixes(mixes);
 
