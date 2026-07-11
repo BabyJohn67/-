@@ -1484,7 +1484,10 @@ export default function App() {
 
                       return (
                         <article className={`hookah-format-variant${isSelected ? ' is-selected' : ''}`} key={variant.id}>
-                          <span className="hookah-format-media">
+                          <span
+                            className={`hookah-format-media${shouldShowImage ? ' has-image' : ''}`}
+                            style={shouldShowImage ? { '--format-image': `url(${variant.image})` } : undefined}
+                          >
                             {shouldShowImage ? (
                               <img
                                 src={variant.image}
