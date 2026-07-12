@@ -51,7 +51,7 @@ export const hookahFormats = [
   },
   {
     id: 'signature',
-    title: 'Особые авторские кальяны',
+    title: 'Авторские кальяны',
     description: 'Премиальные авторские подачи с необычной идеей и оформлением.',
     variants: [
       {
