@@ -29,7 +29,7 @@ export const hookahFormats = [
       {
         id: 'fruit-mix',
         title: 'На грейпфруте',
-        description: 'Освежающая мякоть с яркими нотами цитруса.',
+        description: 'Освежающий грейпфрут с яркими нотами цитруса.',
         priceLabel: '4 000 ₽',
         image: fruitGrapefruitImage
       },
@@ -57,7 +57,7 @@ export const hookahFormats = [
       {
         id: 'signature-light',
         title: 'Азия',
-        description: 'Особая авторская подача в восточном стиле.',
+        description: 'Изящная авторская подача в восточном стиле.',
         priceLabel: '6 000 ₽',
         image: signatureAsiaImage
       },
