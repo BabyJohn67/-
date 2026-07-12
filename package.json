@@ -8,6 +8,7 @@
     "client": "vite --host 127.0.0.1",
     "server": "node server/index.js",
     "build": "vite build",
+    "auto-deploy": "node scripts/autoDeploy.js",
     "start": "NODE_ENV=production node server/index.js"
   },
   "dependencies": {

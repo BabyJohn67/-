@@ -9,12 +9,12 @@ import signatureOhotnikImage from '../assets/hookah-formats/signature-ohotnik.pn
 export const hookahFormats = [
   {
     id: 'classic',
-    title: 'Обычный кальян',
-    description: 'Универсальная подача на чаше для любого вкуса.',
+    title: 'Классический кальян',
+    description: 'Классика, которая не стареет.',
     variants: [
       {
         id: 'classic-bowl',
-        title: 'Авторский',
+        title: 'Классический',
         description: 'Сбалансированная забивка от мастера на классической чаше.',
         priceLabel: '3 500 ₽',
         image: classicHookahImage
@@ -28,15 +28,15 @@ export const hookahFormats = [
     variants: [
       {
         id: 'fruit-mix',
-        title: 'На грейпфруте',
-        description: 'Свежая цитрусовая подача на грейпфруте.',
+        title: 'Освежающий грейпфрут с яркими нотами цитруса',
+        description: '.',
         priceLabel: '4 000 ₽',
         image: fruitGrapefruitImage
       },
       {
         id: 'citrus-fruit',
         title: 'На гранате',
-        description: 'Насыщенная подача на гранате с выразительным вкусом.',
+        description: 'Кисло-сладкий вкус граната с благородной терпкостью.',
         priceLabel: '4 200 ₽',
         image: fruitPomegranateImage
       },
