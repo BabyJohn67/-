@@ -9,7 +9,7 @@ import signatureOhotnikImage from '../assets/hookah-formats/signature-ohotnik.pn
 export const hookahFormats = [
   {
     id: 'classic',
-    title: 'Классический кальян',
+    title: 'Классический хуй кальян',
     description: 'Классика, которая не стареет.',
     variants: [
       {
