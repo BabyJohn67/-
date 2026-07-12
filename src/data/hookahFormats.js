@@ -28,8 +28,8 @@ export const hookahFormats = [
     variants: [
       {
         id: 'fruit-mix',
-        title: 'Освежающий грейпфрут с яркими нотами цитруса',
-        description: '.',
+        title: 'На грейпфруте',
+        description: 'Освежающая мякоть с яркими нотами цитруса.',
         priceLabel: '4 000 ₽',
         image: fruitGrapefruitImage
       },
