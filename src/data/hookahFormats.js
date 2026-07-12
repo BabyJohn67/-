@@ -1,4 +1,10 @@
 import classicHookahImage from '../assets/hookahs/classic-hookah.png';
+import fruitGrapefruitImage from '../assets/hookah-formats/fruit-grapefruit.png';
+import fruitPineappleImage from '../assets/hookah-formats/fruit-pineapple.png';
+import fruitPomegranateImage from '../assets/hookah-formats/fruit-pomegranate.png';
+import signatureAsiaImage from '../assets/hookah-formats/signature-asia.png';
+import signatureIznankaImage from '../assets/hookah-formats/signature-iznanka.png';
+import signatureOhotnikImage from '../assets/hookah-formats/signature-ohotnik.png';
 
 export const hookahFormats = [
   {
@@ -25,21 +31,21 @@ export const hookahFormats = [
         title: 'На грейпфруте',
         description: 'Свежая цитрусовая подача на грейпфруте.',
         priceLabel: '4 000 ₽',
-        image: null
+        image: fruitGrapefruitImage
       },
       {
         id: 'citrus-fruit',
         title: 'На гранате',
         description: 'Насыщенная подача на гранате с выразительным вкусом.',
         priceLabel: '4 200 ₽',
-        image: null
+        image: fruitPomegranateImage
       },
       {
         id: 'premium-fruit',
         title: 'На ананасе',
         description: 'Эффектная подача на ананасе для яркого вечера.',
         priceLabel: '4 500 ₽',
-        image: null
+        image: fruitPineappleImage
       }
     ]
   },
@@ -53,21 +59,21 @@ export const hookahFormats = [
         title: 'Азия',
         description: 'Особая авторская подача в восточном стиле.',
         priceLabel: '6 000 ₽',
-        image: null
+        image: signatureAsiaImage
       },
       {
         id: 'signature-show',
         title: 'Охотник',
         description: 'Брутальная авторская подача с характером.',
         priceLabel: '5 500 ₽',
-        image: null
+        image: signatureOhotnikImage
       },
       {
         id: 'signature-premium',
         title: 'Изнанка',
         description: 'Максимально эффектная подача для особого впечатления.',
         priceLabel: '10 000 ₽',
-        image: null
+        image: signatureIznankaImage
       }
     ]
   }
