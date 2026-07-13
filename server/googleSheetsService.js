@@ -1,10 +1,18 @@
 import { google } from 'googleapis';
+import {
+  GRAMS_PER_UNIT,
+  buildInventoryDeductionPlan,
+  calculateGramsByUnits,
+  calculateUnitsByGrams,
+  isInventoryRequestProcessed,
+  roundInventoryValue
+} from './inventoryMath.js';
 
 const DEFAULT_SHEET_ID = '1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o';
 const DEFAULT_SHEET_NAME = 'Табаки';
 const DEFAULT_ACTIVE_MIXES_SHEET_NAME = 'Активные миксы';
 const DEFAULT_MIX_HISTORY_SHEET_NAME = 'История заказов';
-const GRAMS_PER_UNIT = 8.5;
+const DEFAULT_INVENTORY_MOVEMENT_SHEET_NAME = 'Движение склада';
 const ACTIVE_MIX_HEADERS = [
   'hookahId',
   'mixId',
@@ -35,6 +43,19 @@ const MIX_HISTORY_HEADERS = [
   'Создан',
   'Снят'
 ];
+const INVENTORY_MOVEMENT_HEADERS = [
+  'Дата',
+  'Тип операции',
+  'ID заказа',
+  'Номер кальяна',
+  'Табак',
+  'Процент',
+  'Списано грамм',
+  'Списано единиц',
+  'Остаток грамм',
+  'Остаток единиц',
+  'Комментарий'
+];
 
 function getSheetId() {
   return process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
@@ -54,6 +75,10 @@ function getActiveMixesSheetName() {
 
 function getMixHistorySheetName() {
   return process.env.GOOGLE_MIX_HISTORY_SHEET_NAME || DEFAULT_MIX_HISTORY_SHEET_NAME;
+}
+
+function getInventoryMovementSheetName() {
+  return process.env.GOOGLE_INVENTORY_MOVEMENT_SHEET_NAME || DEFAULT_INVENTORY_MOVEMENT_SHEET_NAME;
 }
 
 function getPrivateKey() {
@@ -179,6 +204,72 @@ async function ensureMixHistorySheet() {
   await repairMixHistoryRows(sheets, sheetName);
 }
 
+async function ensureInventoryMovementSheet() {
+  const sheetName = getInventoryMovementSheetName();
+  await ensureSheetExists(sheetName, INVENTORY_MOVEMENT_HEADERS);
+
+  const sheets = getSheetsClient();
+  const sheetId = await getSheetTabId(sheetName);
+  const values = await sheets.spreadsheets.values.get({
+    spreadsheetId: getSheetId(),
+    range: `${sheetName}!A1:K1`
+  });
+  const headers = (values.data.values?.[0] || []).map(normalizeHeader);
+  const isCurrentSchema = INVENTORY_MOVEMENT_HEADERS.every(
+    (header, index) => headers[index] === normalizeHeader(header)
+  );
+
+  if (!isCurrentSchema) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: getSheetId(),
+      range: `${sheetName}!A1:K1`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [INVENTORY_MOVEMENT_HEADERS]
+      }
+    });
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: getSheetId(),
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId,
+              gridProperties: { frozenRowCount: 1 }
+            },
+            fields: 'gridProperties.frozenRowCount'
+          }
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: INVENTORY_MOVEMENT_HEADERS.length
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.05, green: 0.05, blue: 0.05 },
+                horizontalAlignment: 'CENTER',
+                textFormat: {
+                  foregroundColor: { red: 0.95, green: 0.76, blue: 0.35 },
+                  bold: true
+                }
+              }
+            },
+            fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,textFormat)'
+          }
+        }
+      ]
+    }
+  });
+}
+
 function normalizeHeader(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -188,11 +279,6 @@ function findColumn(headers, variants, fallbackIndex) {
     variants.some((variant) => header.includes(variant))
   );
   return index >= 0 ? index : fallbackIndex;
-}
-
-function parseQuantity(value) {
-  const normalized = String(value || '').replace(',', '.').match(/\d+(\.\d+)?/);
-  return normalized ? Number(normalized[0]) : 0;
 }
 
 function columnToLetter(index) {
@@ -1092,57 +1178,120 @@ function normalizeMixHistoryFromRow(row, rowNumber) {
   };
 }
 
-function buildTobacco(row, rowIndex, nameIndex, quantityIndex, tasteIndex, layout) {
-  const quantity = parseQuantity(row[quantityIndex]);
-  const name = String(row[nameIndex] || '').trim();
-  const taste = String(row[tasteIndex] || '').trim();
+const TOBACCO_HEADER_VARIANTS = {
+  number: ['№', 'номер', 'no'],
+  name: ['наименование', 'название', 'табак', 'name'],
+  quantity: ['кол/во', 'количество', 'остаток', 'шт', 'quantity'],
+  grams: ['граммы', 'грамм', 'вес', 'grams'],
+  taste: ['перевод', 'вкус', 'flavor', 'taste']
+};
+
+function parseInventoryNumber(value) {
+  const normalized = String(value ?? '').trim().replace(',', '.');
+  if (!normalized) return null;
+  const numericValue = Number(normalized);
+  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : null;
+}
+
+function findExactHeaderColumn(headers, variants) {
+  return headers.findIndex((header) => variants.includes(header));
+}
+
+function resolveTobaccoSchema(rows) {
+  for (let rowIndex = 0; rowIndex < Math.min(rows.length, 30); rowIndex += 1) {
+    const headers = (rows[rowIndex] || []).map(normalizeHeader);
+    const nameIndex = findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.name);
+    const quantityIndex = findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.quantity);
+    const gramsIndex = findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.grams);
+
+    if (nameIndex >= 0 && (quantityIndex >= 0 || gramsIndex >= 0)) {
+      return {
+        layout: 'headers',
+        headerRowIndex: rowIndex,
+        numberIndex: findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.number),
+        nameIndex,
+        quantityIndex,
+        gramsIndex,
+        tasteIndex: findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.taste)
+      };
+    }
+  }
+
+  const firstBlockRowIndex = rows.findIndex((row) =>
+    /^\d+$/.test(String(row[1] || '').trim()) && String(row[2] || '').trim()
+  );
+
+  if (firstBlockRowIndex >= 0) {
+    const headerRowIndex = Math.max(0, firstBlockRowIndex - 1);
+    const legacyHeaders = (rows[headerRowIndex] || []).map(normalizeHeader);
+    const gramsIndex = findExactHeaderColumn(legacyHeaders, TOBACCO_HEADER_VARIANTS.grams);
+
+    return {
+      layout: 'block',
+      headerRowIndex,
+      numberIndex: 1,
+      nameIndex: 2,
+      quantityIndex: 3,
+      gramsIndex,
+      tasteIndex: gramsIndex === 4 ? 5 : 4
+    };
+  }
+
+  const headers = (rows[0] || []).map(normalizeHeader);
+  return {
+    layout: 'headers',
+    headerRowIndex: 0,
+    numberIndex: findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.number),
+    nameIndex: findColumn(headers, TOBACCO_HEADER_VARIANTS.name, 0),
+    quantityIndex: findColumn(headers, TOBACCO_HEADER_VARIANTS.quantity, 1),
+    gramsIndex: findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.grams),
+    tasteIndex: findColumn(headers, TOBACCO_HEADER_VARIANTS.taste, 2)
+  };
+}
+
+function buildTobacco(row, rowIndex, schema, sheetName = '') {
+  const rawQuantity = parseInventoryNumber(row[schema.quantityIndex]);
+  const rawGrams = schema.gramsIndex >= 0
+    ? parseInventoryNumber(row[schema.gramsIndex])
+    : null;
+  const grams = rawGrams === null
+    ? calculateGramsByUnits(rawQuantity || 0)
+    : roundInventoryValue(rawGrams, 2);
+  const quantity = calculateUnitsByGrams(grams);
+  const name = String(row[schema.nameIndex] || '').trim();
+  const taste = schema.tasteIndex >= 0 ? String(row[schema.tasteIndex] || '').trim() : '';
   const rowNumber = rowIndex + 1;
 
   return {
     id: `${rowNumber}-${name || 'tobacco'}`,
     rowNumber,
-    nameColumn: columnToLetter(nameIndex),
-    quantityColumn: columnToLetter(quantityIndex),
-    tasteColumn: columnToLetter(tasteIndex),
-    layout,
+    sheetName,
+    nameColumn: columnToLetter(schema.nameIndex),
+    quantityColumn: schema.quantityIndex >= 0 ? columnToLetter(schema.quantityIndex) : '',
+    gramsColumn: schema.gramsIndex >= 0 ? columnToLetter(schema.gramsIndex) : '',
+    tasteColumn: schema.tasteIndex >= 0 ? columnToLetter(schema.tasteIndex) : '',
+    layout: schema.layout,
     name: name || 'Без названия',
     brand: detectBrand(name),
     quantity,
-    grams: Math.round(quantity * GRAMS_PER_UNIT * 10) / 10,
+    grams,
     taste: taste || 'Вкус не указан',
-    inStock: quantity > 0
+    inStock: grams > 0
   };
 }
 
-export function rowsToTobaccos(rows) {
+export function rowsToTobaccos(rows, sheetName = '') {
   if (rows.length === 0) return [];
 
-  const blockRows = rows
-    .map((row, index) => ({ row, index }))
-    .filter(({ row }) => {
-      const number = String(row[1] || '').trim();
-      const name = String(row[2] || '').trim();
-      const quantity = String(row[3] || '').trim();
-      return /^\d+$/.test(number) && name && quantity !== '';
-    })
-    .map(({ row, index }) => buildTobacco(row, index, 2, 3, 4, 'block'));
-
-  if (blockRows.length > 0) {
-    return blockRows;
-  }
-
-  const headers = rows[0].map(normalizeHeader);
-  const nameIndex = findColumn(headers, ['наименование', 'название', 'табак', 'name'], 0);
-  const quantityIndex = findColumn(headers, ['количество', 'кол/во', 'остаток', 'шт', 'quantity'], 1);
-  const tasteIndex = findColumn(headers, ['перевод', 'вкус', 'flavor', 'taste'], 2);
-
+  const schema = resolveTobaccoSchema(rows);
   return rows
-    .slice(1)
-    .map((row, index) => buildTobacco(row, index + 1, nameIndex, quantityIndex, tasteIndex, 'headers'))
-    .filter((item) => item.name !== 'Без названия' || item.taste !== 'Вкус не указан');
+    .map((row, index) => ({ row, index }))
+    .filter(({ row, index }) => index > schema.headerRowIndex && String(row[schema.nameIndex] || '').trim())
+    .map(({ row, index }) => buildTobacco(row, index, schema, sheetName))
+    .filter((item) => item.name !== 'Без названия');
 }
 
-async function getSheetRows() {
+async function getSheetContext() {
   const sheets = getSheetsClient();
   let targetSheetName = getSheetName();
 
@@ -1152,7 +1301,10 @@ async function getSheetRows() {
       range: `${targetSheetName}!A:Z`
     });
 
-    return result.data.values || [];
+    return {
+      sheetName: targetSheetName,
+      rows: result.data.values || []
+    };
   } catch (error) {
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: getSheetId()
@@ -1169,12 +1321,157 @@ async function getSheetRows() {
     range: `${targetSheetName}!A:Z`
   });
 
-  return result.data.values || [];
+  return {
+    sheetName: targetSheetName,
+    rows: result.data.values || []
+  };
+}
+
+async function ensureTobaccoInventorySchema() {
+  let context = await getSheetContext();
+  let schema = resolveTobaccoSchema(context.rows);
+
+  if (schema.quantityIndex < 0) {
+    const sheets = getSheetsClient();
+    const sheetId = await getSheetTabId(context.sheetName);
+    const insertIndex = schema.gramsIndex >= 0 ? schema.gramsIndex : schema.nameIndex + 1;
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: getSheetId(),
+      requestBody: {
+        requests: [
+          {
+            insertDimension: {
+              range: {
+                sheetId,
+                dimension: 'COLUMNS',
+                startIndex: insertIndex,
+                endIndex: insertIndex + 1
+              },
+              inheritFromBefore: insertIndex > 0
+            }
+          }
+        ]
+      }
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: getSheetId(),
+      range: `${context.sheetName}!${columnToLetter(insertIndex)}${schema.headerRowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [['Кол/во']] }
+    });
+
+    context = await getSheetContext();
+    schema = resolveTobaccoSchema(context.rows);
+  }
+
+  if (schema.gramsIndex < 0) {
+    const sheets = getSheetsClient();
+    const sheetId = await getSheetTabId(context.sheetName);
+    const insertIndex = schema.tasteIndex > schema.quantityIndex
+      ? schema.tasteIndex
+      : Math.max(schema.nameIndex, schema.quantityIndex, schema.tasteIndex) + 1;
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: getSheetId(),
+      requestBody: {
+        requests: [
+          {
+            insertDimension: {
+              range: {
+                sheetId,
+                dimension: 'COLUMNS',
+                startIndex: insertIndex,
+                endIndex: insertIndex + 1
+              },
+              inheritFromBefore: true
+            }
+          }
+        ]
+      }
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: getSheetId(),
+      range: `${context.sheetName}!${columnToLetter(insertIndex)}${schema.headerRowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [['Граммы']] }
+    });
+
+    context = await getSheetContext();
+    schema = resolveTobaccoSchema(context.rows);
+  }
+
+  if (schema.gramsIndex < 0) {
+    throw new Error('Не удалось создать колонку «Граммы» во вкладке с табаками.');
+  }
+  if (schema.quantityIndex < 0) {
+    throw new Error('Не удалось создать колонку «Кол/во» во вкладке с табаками.');
+  }
+
+  return { ...context, schema };
+}
+
+async function readAndMigrateTobaccoInventory() {
+  const sheets = getSheetsClient();
+  const context = await ensureTobaccoInventorySchema();
+  const rows = context.rows.map((row) => [...row]);
+  const updates = [];
+
+  for (let rowIndex = context.schema.headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    const name = String(row[context.schema.nameIndex] || '').trim();
+    if (!name) continue;
+
+    const quantityValue = parseInventoryNumber(row[context.schema.quantityIndex]);
+    const gramsValue = parseInventoryNumber(row[context.schema.gramsIndex]);
+    const rowNumber = rowIndex + 1;
+
+    if (gramsValue === null && quantityValue !== null) {
+      const calculatedGrams = calculateGramsByUnits(quantityValue);
+      rows[rowIndex][context.schema.gramsIndex] = calculatedGrams;
+      updates.push({
+        range: `${context.sheetName}!${columnToLetter(context.schema.gramsIndex)}${rowNumber}`,
+        values: [[calculatedGrams]]
+      });
+      continue;
+    }
+
+    if (gramsValue !== null) {
+      const calculatedQuantity = calculateUnitsByGrams(gramsValue);
+      if (quantityValue === null || Math.abs(quantityValue - calculatedQuantity) > 0.0001) {
+        if (quantityValue !== null) {
+          console.warn(
+            `[inventory] Несовпадение остатков для «${name}»: Кол/во=${quantityValue}, Граммы=${gramsValue}. Граммы приняты за источник.`
+          );
+        }
+        rows[rowIndex][context.schema.quantityIndex] = calculatedQuantity;
+        updates.push({
+          range: `${context.sheetName}!${columnToLetter(context.schema.quantityIndex)}${rowNumber}`,
+          values: [[calculatedQuantity]]
+        });
+      }
+    }
+  }
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: getSheetId(),
+      requestBody: {
+        valueInputOption: 'RAW',
+        data: updates
+      }
+    });
+  }
+
+  return {
+    ...context,
+    rows,
+    tobaccos: rowsToTobaccos(rows, context.sheetName)
+  };
 }
 
 export async function readTobaccosFromGoogleApi() {
-  const rows = await getSheetRows();
-  const tobaccos = rowsToTobaccos(rows);
+  const { tobaccos } = await readAndMigrateTobaccoInventory();
 
   if (tobaccos.length === 0) {
     throw new Error('Google Sheet did not contain recognizable tobacco rows');
@@ -1183,62 +1480,92 @@ export async function readTobaccosFromGoogleApi() {
   return tobaccos;
 }
 
-export async function updateTobaccoQuantity({ id, quantity }) {
+export async function updateTobaccoQuantity({ id, quantity, grams: requestedGrams }) {
   const sheets = getSheetsClient();
-  const tobaccos = rowsToTobaccos(await getSheetRows());
+  const inventory = await readAndMigrateTobaccoInventory();
+  const tobaccos = inventory.tobaccos;
   const tobacco = tobaccos.find((item) => item.id === id);
 
   if (!tobacco) {
     throw new Error('Позиция не найдена в Google Таблице. Обновите список и попробуйте снова.');
   }
 
-  await sheets.spreadsheets.values.update({
+  const grams = requestedGrams === undefined
+    ? calculateGramsByUnits(quantity)
+    : roundInventoryValue(requestedGrams, 2);
+  const normalizedQuantity = calculateUnitsByGrams(grams);
+
+  await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: getSheetId(),
-    range: `${getSheetName()}!${tobacco.quantityColumn}${tobacco.rowNumber}`,
-    valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [[quantity]]
+      valueInputOption: 'RAW',
+      data: [
+        {
+          range: `${tobacco.sheetName}!${tobacco.quantityColumn}${tobacco.rowNumber}`,
+          values: [[normalizedQuantity]]
+        },
+        {
+          range: `${tobacco.sheetName}!${tobacco.gramsColumn}${tobacco.rowNumber}`,
+          values: [[grams]]
+        }
+      ]
     }
   });
 
   return {
     ...tobacco,
-    quantity,
-    grams: Math.round(quantity * GRAMS_PER_UNIT * 10) / 10,
-    inStock: quantity > 0
+    quantity: normalizedQuantity,
+    grams,
+    inStock: grams > 0
   };
 }
 
-export async function appendTobacco({ name, quantity, taste }) {
+export async function appendTobacco({ name, quantity, grams: requestedGrams, taste }) {
   const sheets = getSheetsClient();
-  const rows = await getSheetRows();
-  const existing = rowsToTobaccos(rows);
-  const layout = existing[0]?.layout || 'headers';
-  const nextNumber = existing.length + 1;
-  const values = layout === 'block'
-    ? [[nextNumber, name, quantity, taste]]
-    : [[name, quantity, taste]];
-  const range = layout === 'block' ? `${getSheetName()}!B:E` : `${getSheetName()}!A:C`;
+  const inventory = await readAndMigrateTobaccoInventory();
+  const grams = requestedGrams === undefined
+    ? calculateGramsByUnits(quantity)
+    : roundInventoryValue(requestedGrams, 2);
+  const normalizedQuantity = calculateUnitsByGrams(grams);
+  const highestColumnIndex = Math.max(
+    inventory.schema.numberIndex,
+    inventory.schema.nameIndex,
+    inventory.schema.quantityIndex,
+    inventory.schema.gramsIndex,
+    inventory.schema.tasteIndex
+  );
+  const row = Array.from({ length: highestColumnIndex + 1 }, () => '');
+  row[inventory.schema.nameIndex] = name;
+  row[inventory.schema.quantityIndex] = normalizedQuantity;
+  row[inventory.schema.gramsIndex] = grams;
+  if (inventory.schema.tasteIndex >= 0) row[inventory.schema.tasteIndex] = taste;
+  if (inventory.schema.numberIndex >= 0) {
+    const numbers = inventory.rows
+      .slice(inventory.schema.headerRowIndex + 1)
+      .map((current) => Number(current[inventory.schema.numberIndex]))
+      .filter(Number.isFinite);
+    row[inventory.schema.numberIndex] = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
+  }
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: getSheetId(),
-    range,
-    valueInputOption: 'USER_ENTERED',
+    range: `${inventory.sheetName}!A:${columnToLetter(highestColumnIndex)}`,
+    valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
-      values
+      values: [row]
     }
   });
 
-  const refreshed = rowsToTobaccos(await getSheetRows());
-  return refreshed.find((item) => item.name === name && item.taste === taste) || {
+  const refreshed = await readTobaccosFromGoogleApi();
+  return [...refreshed].reverse().find((item) => item.name === name && item.taste === taste) || {
     id: `${Date.now()}-${name}`,
     name,
     brand: detectBrand(name),
-    quantity,
-    grams: Math.round(quantity * GRAMS_PER_UNIT * 10) / 10,
+    quantity: normalizedQuantity,
+    grams,
     taste,
-    inStock: quantity > 0
+    inStock: grams > 0
   };
 }
 
@@ -1325,6 +1652,256 @@ export async function saveActiveMixToGoogleApi(mix) {
     ...mix,
     updatedAt
   };
+}
+
+export class InventoryOperationError extends Error {
+  constructor(message, statusCode = 500, code = 'INVENTORY_OPERATION_FAILED', details = {}) {
+    super(message);
+    this.name = 'InventoryOperationError';
+    this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+let inventoryTransactionQueue = Promise.resolve();
+
+function runInventoryTransaction(operation) {
+  const transaction = inventoryTransactionQueue.then(operation, operation);
+  inventoryTransactionQueue = transaction.catch(() => {});
+  return transaction;
+}
+
+function getInventoryErrorStatus(error) {
+  if (error?.code === 'TOBACCO_NOT_FOUND') return 404;
+  if (error?.code === 'INSUFFICIENT_STOCK') return 409;
+  if (
+    error?.code === 'EMPTY_COMPONENTS' ||
+    error?.code === 'INVALID_COMPONENT' ||
+    error?.code === 'INVALID_PERCENT_TOTAL' ||
+    error?.code === 'DUPLICATE_TOBACCO'
+  ) {
+    return 400;
+  }
+  return 500;
+}
+
+function getNextValuesRow(values) {
+  return Math.max(2, (values || []).length + 1);
+}
+
+function buildActiveMixStorageRow(mix, updatedAt) {
+  return [
+    mix.hookahId,
+    mix.id,
+    JSON.stringify({
+      tobaccos: mix.tobaccos || [],
+      format: mix.format || null
+    }),
+    mix.comment || '',
+    mix.createdAt,
+    updatedAt,
+    'TRUE',
+    ...buildReadableActiveMixCells(mix, true, updatedAt)
+  ];
+}
+
+export async function saveActiveMixWithInventoryToGoogleApi({
+  mix,
+  requestId,
+  expectedActiveMixId = ''
+}) {
+  return runInventoryTransaction(async () => {
+    const normalizedRequestId = String(requestId || '').trim();
+    if (!normalizedRequestId) {
+      throw new InventoryOperationError('Не указан идентификатор заказа.', 400, 'REQUEST_ID_REQUIRED');
+    }
+
+    const sheets = getSheetsClient();
+    const inventory = await readAndMigrateTobaccoInventory();
+    await ensureActiveMixesSheet();
+    await ensureMixHistorySheet();
+    await ensureInventoryMovementSheet();
+
+    const activeSheetName = getActiveMixesSheetName();
+    const historySheetName = getMixHistorySheetName();
+    const movementSheetName = getInventoryMovementSheetName();
+    const [activeResult, historyResult, movementResult] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId: getSheetId(),
+        range: `${activeSheetName}!A:M`
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: getSheetId(),
+        range: `${historySheetName}!A:M`
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: getSheetId(),
+        range: `${movementSheetName}!A:K`
+      })
+    ]);
+
+    const activeValues = activeResult.data.values || [];
+    const movementValues = movementResult.data.values || [];
+    const normalizedActiveRows = activeValues
+      .map((row, index) => normalizeActiveMixFromRow(row, index + 1))
+      .filter(Boolean);
+
+    if (isInventoryRequestProcessed(movementValues.slice(1), normalizedRequestId)) {
+      const existingRequest = normalizedActiveRows.find((item) => item.mix.id === normalizedRequestId);
+      if (existingRequest && String(existingRequest.mix.hookahId) === String(mix.hookahId)) {
+        return {
+          mix: existingRequest.mix,
+          duplicate: true,
+          inventory: null
+        };
+      }
+
+      throw new InventoryOperationError(
+        'Этот заказ уже был обработан. Обновите список активных кальянов.',
+        409,
+        'REQUEST_ALREADY_PROCESSED'
+      );
+    }
+
+    const activeForHookah = normalizedActiveRows
+      .filter((item) => item.isActive && String(item.mix.hookahId) === String(mix.hookahId))
+      .sort((left, right) => right.rowNumber - left.rowNumber)[0] || null;
+    const normalizedExpectedMixId = String(expectedActiveMixId || '').trim();
+    const currentMixId = String(activeForHookah?.mix?.id || '');
+
+    if (currentMixId !== normalizedExpectedMixId) {
+      throw new InventoryOperationError(
+        currentMixId
+          ? 'Активный микс этого кальяна уже изменился. Обновите данные перед заменой.'
+          : 'Активный микс уже снят. Обновите данные перед сохранением.',
+        409,
+        'ACTIVE_MIX_CONFLICT',
+        { currentMixId }
+      );
+    }
+
+    let deductionPlan;
+    try {
+      deductionPlan = buildInventoryDeductionPlan(inventory.tobaccos, mix.tobaccos);
+    } catch (error) {
+      throw new InventoryOperationError(
+        error.message || 'Не удалось рассчитать списание табака.',
+        getInventoryErrorStatus(error),
+        error.code || 'INVENTORY_CALCULATION_FAILED',
+        error.details || {}
+      );
+    }
+
+    const updatedAt = new Date().toISOString();
+    const enrichedTobaccos = mix.tobaccos.map((component) => {
+      const deduction = deductionPlan.deductions.find(
+        (item) => String(item.tobacco.id) === String(component.id)
+      );
+      return {
+        ...component,
+        gramsUsed: deduction?.gramsUsed || 0,
+        unitsUsed: deduction?.unitsUsed || 0
+      };
+    });
+    const savedMix = {
+      ...mix,
+      id: normalizedRequestId,
+      tobaccos: enrichedTobaccos,
+      updatedAt
+    };
+    const updates = [];
+
+    for (const deduction of deductionPlan.deductions) {
+      updates.push(
+        {
+          range: `${deduction.tobacco.sheetName}!${deduction.tobacco.gramsColumn}${deduction.tobacco.rowNumber}`,
+          values: [[deduction.remainingGrams]]
+        },
+        {
+          range: `${deduction.tobacco.sheetName}!${deduction.tobacco.quantityColumn}${deduction.tobacco.rowNumber}`,
+          values: [[deduction.remainingUnits]]
+        }
+      );
+    }
+
+    if (activeForHookah) {
+      const replacedMix = {
+        ...activeForHookah.mix,
+        updatedAt,
+        closedAt: updatedAt,
+        status: 'Заменен'
+      };
+      updates.push({
+        range: `${historySheetName}!A${getNextValuesRow(historyResult.data.values)}:M${getNextValuesRow(historyResult.data.values)}`,
+        values: [buildMixHistoryStorageRow(replacedMix)]
+      });
+    }
+
+    const activeRowNumber = activeForHookah?.rowNumber || getNextValuesRow(activeValues);
+    updates.push({
+      range: `${activeSheetName}!A${activeRowNumber}:M${activeRowNumber}`,
+      values: [buildActiveMixStorageRow(savedMix, updatedAt)]
+    });
+
+    let movementRowNumber = getNextValuesRow(movementValues);
+    for (const deduction of deductionPlan.deductions) {
+      const tobaccoTitle = [deduction.tobacco.brand, deduction.tobacco.name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      updates.push({
+        range: `${movementSheetName}!A${movementRowNumber}:K${movementRowNumber}`,
+        values: [[
+          updatedAt,
+          'Списание',
+          normalizedRequestId,
+          String(savedMix.hookahId),
+          tobaccoTitle,
+          deduction.component.percent,
+          deduction.gramsUsed,
+          deduction.unitsUsed,
+          deduction.remainingGrams,
+          deduction.remainingUnits,
+          savedMix.comment || ''
+        ]]
+      });
+      movementRowNumber += 1;
+    }
+
+    try {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: getSheetId(),
+        requestBody: {
+          valueInputOption: 'RAW',
+          data: updates
+        }
+      });
+    } catch (error) {
+      throw new InventoryOperationError(
+        'Не удалось обновить склад. Заказ не создан.',
+        500,
+        'GOOGLE_SHEETS_WRITE_FAILED',
+        { cause: error.message }
+      );
+    }
+
+    return {
+      mix: savedMix,
+      duplicate: false,
+      inventory: {
+        totalGrams: deductionPlan.totalGrams,
+        totalUnits: deductionPlan.totalUnits,
+        deductions: deductionPlan.deductions.map((deduction) => ({
+          tobaccoId: deduction.tobacco.id,
+          gramsUsed: deduction.gramsUsed,
+          unitsUsed: deduction.unitsUsed,
+          remainingGrams: deduction.remainingGrams,
+          remainingUnits: deduction.remainingUnits
+        }))
+      }
+    };
+  });
 }
 
 export async function clearActiveMixFromGoogleApi(hookahId) {

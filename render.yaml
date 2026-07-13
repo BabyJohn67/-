@@ -20,6 +20,10 @@ services:
         value: Наличие табаков
       - key: GOOGLE_ACTIVE_MIXES_SHEET_NAME
         value: Активные миксы
+      - key: GOOGLE_MIX_HISTORY_SHEET_NAME
+        value: История заказов
+      - key: GOOGLE_INVENTORY_MOVEMENT_SHEET_NAME
+        value: Движение склада
       - key: PUBLIC_SITE_URL
         value: https://hookah-menu-8cqq.onrender.com
       - key: GOOGLE_SERVICE_ACCOUNT_EMAIL

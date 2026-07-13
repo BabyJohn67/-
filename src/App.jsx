@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   BellRing,
@@ -47,6 +47,7 @@ const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
 const MASTER_LOGIN = 'master';
+const STANDARD_MIX_GRAMS = 17;
 const HISTORY_PERIODS = [
   { id: '24h', label: '24 часа' },
   { id: '3d', label: '3 дня' },
@@ -143,6 +144,24 @@ const STRENGTH_OPTIONS = [
 
 function formatGrams(quantity) {
   return Math.round(quantity * GRAMS_PER_UNIT * 10) / 10;
+}
+
+function getInventoryGrams(item) {
+  const grams = Number(item?.grams);
+  return Number.isFinite(grams) ? Math.round(grams * 100) / 100 : formatGrams(Number(item?.quantity || 0));
+}
+
+function formatInventoryValue(value, maximumFractionDigits = 2) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits }).format(Number(value || 0));
+}
+
+function calculateMixGrams(percent) {
+  return Math.round((Number(percent || 0) / 100) * STANDARD_MIX_GRAMS * 100) / 100;
+}
+
+function createInventoryRequestId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function getBrand(item) {
@@ -421,8 +440,12 @@ export default function App() {
     hookahId: '',
     formatId: '',
     comment: '',
-    tobaccos: []
+    tobaccos: [],
+    replacingMixId: ''
   });
+  const [isMixSaving, setIsMixSaving] = useState(false);
+  const [pendingMixRequest, setPendingMixRequest] = useState(null);
+  const mixSaveLockRef = useRef(false);
   const [mixSearch, setMixSearch] = useState('');
   const [lastSavedMix, setLastSavedMix] = useState(null);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -437,7 +460,7 @@ export default function App() {
   const [masterSaveMessage, setMasterSaveMessage] = useState('');
   const [newTobacco, setNewTobacco] = useState({
     name: '',
-    quantity: 1,
+    grams: GRAMS_PER_UNIT,
     taste: ''
   });
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -664,14 +687,14 @@ export default function App() {
   const availableCount = tobaccos.filter((item) => item.quantity > 0).length;
   const selectedStrengthLabel = STRENGTH_OPTIONS.find((option) => option.id === selectedStrength)?.label || 'Не важно';
   const masterStats = useMemo(() => {
-    const totalUnits = tobaccos.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const totalGrams = tobaccos.reduce((sum, item) => sum + getInventoryGrams(item), 0);
 
     return {
       total: tobaccos.length,
       available: tobaccos.filter((item) => item.quantity > 1).length,
       low: tobaccos.filter((item) => item.quantity > 0 && item.quantity <= 1).length,
       empty: tobaccos.filter((item) => item.quantity <= 0).length,
-      grams: Math.round(totalUnits * GRAMS_PER_UNIT * 10) / 10
+      grams: Math.round(totalGrams * 100) / 100
     };
   }, [tobaccos]);
 
@@ -712,7 +735,20 @@ export default function App() {
     () => mixDraft.tobaccos.reduce((sum, item) => sum + Number(item.percent || 0), 0),
     [mixDraft.tobaccos]
   );
-  const isMixPercentComplete = Math.abs(mixPercentTotal - 100) <= 0.001;
+  const isMixPercentComplete = Math.abs(mixPercentTotal - 100) <= 0.01;
+  const mixComponentGrams = useMemo(() => {
+    const values = mixDraft.tobaccos.map((item) => calculateMixGrams(item.percent));
+    if (isMixPercentComplete && values.length > 0) {
+      const roundedTotal = Math.round(values.reduce((sum, grams) => sum + grams, 0) * 100) / 100;
+      values[values.length - 1] = Math.round(
+        (values[values.length - 1] + STANDARD_MIX_GRAMS - roundedTotal) * 100
+      ) / 100;
+    }
+    return values;
+  }, [isMixPercentComplete, mixDraft.tobaccos]);
+  const mixCalculatedTotalGrams = Math.round(
+    mixComponentGrams.reduce((sum, grams) => sum + grams, 0) * 100
+  ) / 100;
 
   const selectedMixIds = useMemo(
     () => new Set(mixDraft.tobaccos.map((item) => item.tobaccoId)),
@@ -906,12 +942,29 @@ export default function App() {
     );
   }
 
+  function updateDraftGrams(id, grams) {
+    const normalizedGrams = Math.max(0, Number(grams || 0));
+    const quantity = Math.round((normalizedGrams / GRAMS_PER_UNIT) * 10000) / 10000;
+    setTobaccos((current) =>
+      current.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              grams: normalizedGrams,
+              quantity,
+              inStock: normalizedGrams > 0
+            }
+          : item
+      )
+    );
+  }
+
   async function saveQuantityToSheet(item) {
     setMasterSaveMessage('');
     setSavingIds((current) => [...new Set([...current, item.id])]);
 
     try {
-      const saved = await saveTobaccoQuantity(item.id, item.quantity, masterPin);
+      const saved = await saveTobaccoQuantity(item.id, item.quantity, masterPin, item.grams);
       setTobaccos((current) =>
         current.map((tobacco) => (tobacco.id === item.id ? { ...tobacco, ...saved } : tobacco))
       );
@@ -930,7 +983,7 @@ export default function App() {
     try {
       const saved = await addTobacco(newTobacco, masterPin);
       setTobaccos((current) => [...current, saved]);
-      setNewTobacco({ name: '', quantity: 1, taste: '' });
+      setNewTobacco({ name: '', grams: GRAMS_PER_UNIT, taste: '' });
       setMasterSaveMessage(`Добавлено: ${saved.name}`);
     } catch (saveError) {
       setMasterSaveMessage(saveError.message || 'Не удалось добавить позицию');
@@ -1027,8 +1080,10 @@ export default function App() {
             tobaccoId: item.id,
             percent: Number(item.percent || 0)
           }))
-        : []
+        : [],
+      replacingMixId: mix?.id || ''
     });
+    setPendingMixRequest(null);
     setMixSaveMessage('');
     setLastSavedMix(null);
     setMasterTab('order');
@@ -1044,9 +1099,11 @@ export default function App() {
       return {
         ...current,
         hookahId,
-        formatId: nextFormatId
+        formatId: nextFormatId,
+        replacingMixId: activeHookahMixes[hookahId]?.id || ''
       };
     });
+    setPendingMixRequest(null);
   }
 
   async function clearHookahMix(hookahId) {
@@ -1067,8 +1124,10 @@ export default function App() {
           ...current,
           formatId: '',
           comment: '',
-          tobaccos: []
+          tobaccos: [],
+          replacingMixId: ''
         }));
+        setPendingMixRequest(null);
       }
       if (masterTab === 'history') {
         refreshMixHistory(historyPeriod);
@@ -1121,6 +1180,7 @@ export default function App() {
 
   async function saveHookahMix(event) {
     event.preventDefault();
+    if (mixSaveLockRef.current) return;
     setMixSaveMessage('');
     setLastSavedMix(null);
 
@@ -1168,6 +1228,19 @@ export default function App() {
       })
       .filter(Boolean);
 
+    const requestFingerprint = JSON.stringify({
+      hookahId: mixDraft.hookahId,
+      formatId: mixDraft.formatId,
+      comment: mixDraft.comment,
+      tobaccos: selectedTobaccos
+    });
+    const requestId = pendingMixRequest?.fingerprint === requestFingerprint
+      ? pendingMixRequest.id
+      : createInventoryRequestId();
+    setPendingMixRequest({ id: requestId, fingerprint: requestFingerprint });
+    mixSaveLockRef.current = true;
+    setIsMixSaving(true);
+
     try {
       const saved = await saveActiveMix(
         mixDraft.hookahId,
@@ -1180,7 +1253,9 @@ export default function App() {
             variantTitle: selectedMixFormat.variant.title,
             priceLabel: selectedMixFormat.variant.priceLabel
           },
-          comment: mixDraft.comment
+          comment: mixDraft.comment,
+          requestId,
+          expectedActiveMixId: mixDraft.replacingMixId
         },
         masterPin
       );
@@ -1190,8 +1265,14 @@ export default function App() {
         [saved.hookahId]: saved
       }));
       setMixSaveMessage(`Заказ сохранён для кальяна №${saved.hookahId}`);
+      setMixDraft((current) => ({ ...current, replacingMixId: saved.id }));
+      setPendingMixRequest(null);
+      await refreshTobaccos();
     } catch (saveError) {
       setMixSaveMessage(saveError.message || 'Не удалось сохранить микс');
+    } finally {
+      mixSaveLockRef.current = false;
+      setIsMixSaving(false);
     }
   }
 
@@ -2375,6 +2456,9 @@ export default function App() {
                               <div>
                                 <strong>{tobacco ? `${getBrand(tobacco)} ${tobacco.name}` : 'Табак не найден'}</strong>
                                 <small>{tobacco?.taste || 'Проверьте список табаков'}</small>
+                                <small className="mix-component-usage">
+                                  {item.percent || 0}% — {formatInventoryValue(mixComponentGrams[index])} г
+                                </small>
                               </div>
                               <label>
                                 %
@@ -2418,7 +2502,13 @@ export default function App() {
                 </div>
 
                 <div className={`mix-total-card is-${mixPercentState.type}`}>
-                  <strong>Сумма: {mixPercentTotal}%</strong>
+                  <div>
+                    <strong>Сумма: {mixPercentTotal}%</strong>
+                    <small>
+                      Общий вес: {formatInventoryValue(mixCalculatedTotalGrams)} г
+                      {!isMixPercentComplete && ` из ${STANDARD_MIX_GRAMS} г`}
+                    </small>
+                  </div>
                   <span>{mixPercentState.label}</span>
                 </div>
 
@@ -2434,10 +2524,11 @@ export default function App() {
                 <div className="master-mix-actions">
                   <button
                     className="primary-button"
+                    disabled={!canSaveMix || isMixSaving}
                     title={canSaveMix ? 'Сохранить заказ' : 'Нажмите, чтобы увидеть что нужно исправить'}
                     type="submit"
                   >
-                    Сохранить заказ
+                    {isMixSaving ? 'Создаём заказ…' : 'Сохранить заказ'}
                   </button>
                 </div>
 
@@ -2531,13 +2622,13 @@ export default function App() {
                   </label>
 
                   <label>
-                    Кол-во
+                    Остаток, г
                     <input
                       type="number"
                       min="0"
-                      step="1"
-                      value={newTobacco.quantity}
-                      onChange={(event) => setNewTobacco((current) => ({ ...current, quantity: Number(event.target.value || 0) }))}
+                      step="0.01"
+                      value={newTobacco.grams}
+                      onChange={(event) => setNewTobacco((current) => ({ ...current, grams: Number(event.target.value || 0) }))}
                     />
                   </label>
 
@@ -2638,15 +2729,18 @@ export default function App() {
                               </div>
 
                               <div className="master-row-controls">
-                                <span>{formatGrams(item.quantity)} г</span>
+                                <span className="inventory-amount-summary">
+                                  <strong>{formatInventoryValue(getInventoryGrams(item))} г</strong>
+                                  <small>{formatInventoryValue(item.quantity, 4)} ед.</small>
+                                </span>
                                 <label>
-                                  Кол-во
+                                  Остаток, г
                                   <input
                                     type="number"
                                     min="0"
-                                    step="1"
-                                    value={item.quantity}
-                                    onChange={(event) => updateDraftQuantity(item.id, Number(event.target.value || 0))}
+                                    step="0.01"
+                                    value={getInventoryGrams(item)}
+                                    onChange={(event) => updateDraftGrams(item.id, event.target.value)}
                                   />
                                 </label>
                                 <button

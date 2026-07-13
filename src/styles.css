@@ -1957,6 +1957,12 @@ h2 {
   line-height: 1.35;
 }
 
+.selected-mix-row .mix-component-usage {
+  margin-top: 8px;
+  color: var(--gold-soft);
+  font-weight: 800;
+}
+
 .selected-mix-heading {
   display: flex;
   align-items: flex-start;
@@ -2014,6 +2020,16 @@ h2 {
 .mix-total-card strong {
   color: #fff6e4;
   font-size: 20px;
+}
+
+.mix-total-card > div {
+  display: grid;
+  gap: 5px;
+}
+
+.mix-total-card small {
+  color: var(--gold-soft);
+  font-weight: 800;
 }
 
 .mix-total-card span {
@@ -2435,6 +2451,22 @@ h2 {
   color: var(--gold-soft);
   font-weight: 900;
   text-align: right;
+}
+
+.inventory-amount-summary {
+  display: grid;
+  gap: 3px;
+}
+
+.inventory-amount-summary strong,
+.inventory-amount-summary small {
+  display: block;
+  white-space: nowrap;
+}
+
+.inventory-amount-summary small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .master-row-controls label {

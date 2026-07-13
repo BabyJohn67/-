@@ -35,14 +35,14 @@ export async function loadConfig() {
   }
 }
 
-export async function saveTobaccoQuantity(id, quantity, masterPin) {
+export async function saveTobaccoQuantity(id, quantity, masterPin, grams) {
   const response = await fetch(`/api/tobaccos/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       'x-master-pin': masterPin
     },
-    body: JSON.stringify({ quantity })
+    body: JSON.stringify({ quantity, grams })
   });
   const data = await response.json();
 

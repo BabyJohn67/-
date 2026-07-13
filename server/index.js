@@ -11,9 +11,10 @@ import {
   readMixHistoryFromGoogleApi,
   readTobaccosFromGoogleApi,
   rowsToTobaccos as rowsToTobaccosFromSheet,
-  saveActiveMixToGoogleApi,
+  saveActiveMixWithInventoryToGoogleApi,
   updateTobaccoQuantity
 } from './googleSheetsService.js';
+import { assertInventoryStorageAvailable } from './inventoryMath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -285,41 +286,67 @@ app.get('/api/hookahs/:hookahId/mix', (request, response) => {
   response.json({ hookahId, mix: mixes[hookahId] || null, storage: getActiveMixStorageInfo() });
 });
 
-app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
+app.put('/api/hookahs/:hookahId/mix', requireMasterPin, async (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
   const tobaccos = Array.isArray(request.body.tobaccos) ? request.body.tobaccos : [];
   const comment = String(request.body.comment || '').trim();
   const format = normalizeMixFormat(request.body.format);
+  const requestId = String(request.body.requestId || '').trim();
+  const expectedActiveMixId = String(request.body.expectedActiveMixId || '').trim();
 
-  if (!hookahId) {
+  if (!/^\d+$/.test(hookahId)) {
     response.status(400).json({ message: 'Укажите номер кальяна.' });
     return;
   }
 
-  const normalizedTobaccos = tobaccos
-    .map((item) => ({
+  if (Number(hookahId) < 1 || Number(hookahId) > 10) {
+    response.status(404).json({ message: 'Такой кальян не найден.' });
+    return;
+  }
+
+  if (!requestId) {
+    response.status(400).json({ message: 'Не удалось определить заказ. Повторите сохранение.' });
+    return;
+  }
+
+  const normalizedTobaccos = tobaccos.map((item) => ({
       id: String(item.id || ''),
       brand: String(item.brand || '').trim(),
       name: String(item.name || '').trim(),
       taste: String(item.taste || '').trim(),
       percent: Number(item.percent || 0)
-    }))
-    .filter((item) => item.name && Number.isFinite(item.percent) && item.percent > 0);
+    }));
 
   if (normalizedTobaccos.length === 0) {
     response.status(400).json({ message: 'Добавьте хотя бы один табак в микс.' });
     return;
   }
 
+  if (normalizedTobaccos.some((item) => !item.id || !item.name || !Number.isFinite(item.percent) || item.percent <= 0)) {
+    response.status(400).json({ message: 'Проверьте выбранные табаки и проценты.' });
+    return;
+  }
+
   const totalPercent = normalizedTobaccos.reduce((sum, item) => sum + item.percent, 0);
 
-  if (Math.abs(totalPercent - 100) > 0.001) {
+  if (Math.abs(totalPercent - 100) > 0.01) {
     response.status(400).json({ message: 'Сумма процентов в миксе должна быть ровно 100%.' });
     return;
   }
 
+  try {
+    assertInventoryStorageAvailable(hasGoogleCredentials());
+  } catch (error) {
+    response.status(503).json({
+      message: error.message,
+      code: error.code,
+      storage: getActiveMixStorageInfo()
+    });
+    return;
+  }
+
   const mix = {
-    id: `mix-${hookahId}-${Date.now()}`,
+    id: requestId,
     hookahId,
     tobaccos: normalizedTobaccos,
     format,
@@ -327,29 +354,30 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
     createdAt: new Date().toISOString()
   };
 
-  if (hasGoogleCredentials()) {
-    saveActiveMixToGoogleApi(mix)
-      .then((savedMix) => {
-        response.json({ mix: savedMix, storage: getActiveMixStorageInfo() });
-      })
-      .catch((error) => {
-        response.status(500).json({
-          message: 'Не удалось сохранить активный микс',
-          details: error.message,
-          storage: getActiveMixStorageInfo()
-        });
-      });
-    return;
+  try {
+    const result = await saveActiveMixWithInventoryToGoogleApi({
+      mix,
+      requestId,
+      expectedActiveMixId
+    });
+    response.json({
+      mix: result.mix,
+      inventory: result.inventory,
+      duplicate: result.duplicate,
+      storage: getActiveMixStorageInfo()
+    });
+  } catch (error) {
+    const statusCode = Number(error.statusCode) || 500;
+    if (statusCode >= 500) {
+      console.error('[inventory] Не удалось создать заказ:', error.message);
+    }
+    response.status(statusCode).json({
+      message: statusCode >= 500 ? 'Не удалось обновить склад. Заказ не создан.' : error.message,
+      code: error.code || 'INVENTORY_OPERATION_FAILED',
+      details: statusCode < 500 ? error.details : undefined,
+      storage: getActiveMixStorageInfo()
+    });
   }
-
-  const mixes = readActiveMixes();
-  if (mixes[hookahId]) {
-    appendMixHistory(mixes[hookahId], 'Заменен');
-  }
-  mixes[hookahId] = mix;
-  writeActiveMixes(mixes);
-
-  response.json({ mix, storage: getActiveMixStorageInfo() });
 });
 
 app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
@@ -433,15 +461,18 @@ app.get('/api/tobaccos', async (_request, response) => {
 app.patch('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
   try {
     const quantity = Number(request.body.quantity);
+    const hasGrams = request.body.grams !== undefined;
+    const grams = Number(request.body.grams);
 
-    if (!Number.isFinite(quantity) || quantity < 0) {
-      response.status(400).json({ message: 'Количество должно быть числом от 0 и выше.' });
+    if ((hasGrams && (!Number.isFinite(grams) || grams < 0)) || (!hasGrams && (!Number.isFinite(quantity) || quantity < 0))) {
+      response.status(400).json({ message: 'Остаток должен быть числом от 0 и выше.' });
       return;
     }
 
     const tobacco = await updateTobaccoQuantity({
       id: request.params.id,
-      quantity
+      quantity,
+      grams: hasGrams ? grams : undefined
     });
 
     response.json({ tobacco });
@@ -458,21 +489,24 @@ app.post('/api/tobaccos', requireMasterPin, async (request, response) => {
     const name = String(request.body.name || '').trim();
     const taste = String(request.body.taste || '').trim();
     const quantity = Number(request.body.quantity || 0);
+    const hasGrams = request.body.grams !== undefined;
+    const grams = Number(request.body.grams);
 
     if (!name || !taste) {
       response.status(400).json({ message: 'Заполните наименование и перевод / вкус.' });
       return;
     }
 
-    if (!Number.isFinite(quantity) || quantity < 0) {
-      response.status(400).json({ message: 'Количество должно быть числом от 0 и выше.' });
+    if ((hasGrams && (!Number.isFinite(grams) || grams < 0)) || (!hasGrams && (!Number.isFinite(quantity) || quantity < 0))) {
+      response.status(400).json({ message: 'Остаток должен быть числом от 0 и выше.' });
       return;
     }
 
     const tobacco = await appendTobacco({
       name,
       taste,
-      quantity
+      quantity,
+      grams: hasGrams ? grams : undefined
     });
 
     response.status(201).json({ tobacco });
