@@ -63,7 +63,7 @@ export const hookahFormats = [
       },
       {
         id: 'signature-show',
-        title: 'Охотник1488',
+        title: 'Охотник',
         description: 'Брутальная авторская подача с характером.',
         priceLabel: '5 500 ₽',
         image: signatureOhotnikImage
