@@ -201,6 +201,51 @@ h1 {
   font-weight: 900;
 }
 
+.guest-contact-card {
+  max-width: 690px;
+  margin-top: 22px;
+  border: 1px solid rgba(242, 207, 131, 0.22);
+  border-radius: 8px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(31, 26, 18, 0.9), rgba(18, 15, 10, 0.78));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.guest-contact-title {
+  display: block;
+  color: var(--gold-soft);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.guest-contact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 12px;
+}
+
+.guest-contact-list a,
+.guest-contact-list span {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(242, 207, 131, 0.16);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #f8f0dd;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.guest-contact-list svg {
+  flex: 0 0 auto;
+  color: var(--gold-soft);
+}
+
 .primary-button,
 .ghost-button,
 .error-banner button {
@@ -1001,6 +1046,70 @@ h2 {
 .guest-comment-field textarea:focus {
   border-color: rgba(242, 207, 131, 0.52);
   box-shadow: 0 0 0 3px rgba(217, 170, 69, 0.12);
+}
+
+.guest-details-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  border: 1px solid rgba(217, 170, 69, 0.22);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgba(217, 170, 69, 0.09), transparent 42%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.guest-details-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.guest-details-heading h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.guest-details-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.guest-details-field {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guest-details-field input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #fff6e4;
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+}
+
+.guest-details-field input::placeholder {
+  color: rgba(241, 226, 191, 0.48);
+}
+
+.guest-details-field input:focus {
+  outline: 0;
+  border-color: rgba(242, 207, 131, 0.56);
+  box-shadow: 0 0 0 3px rgba(217, 170, 69, 0.12);
+}
+
+.guest-details-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .send-options,
@@ -2532,6 +2641,10 @@ h2 {
 
   .strength-picker button {
     flex: 1 1 calc(50% - 8px);
+  }
+
+  .guest-details-fields {
+    grid-template-columns: 1fr;
   }
 
   .send-options .primary-button,

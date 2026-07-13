@@ -8,6 +8,9 @@ import {
   Heart,
   Lock,
   LogOut,
+  MapPin,
+  MessageCircle,
+  Phone,
   Plus,
   RefreshCcw,
   Search,
@@ -38,6 +41,7 @@ import {
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
 const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
+const CONTACT_STORAGE_KEY = 'hookah-menu-contact-data-v1';
 const MASTER_SESSION_KEY = 'hookah-menu-master-enabled-v1';
 const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
@@ -256,6 +260,22 @@ function loadStoredTableNumber() {
   }
 }
 
+function loadStoredContactData() {
+  try {
+    const raw = localStorage.getItem(CONTACT_STORAGE_KEY);
+    if (!raw) return { name: '', phone: '', social: '' };
+
+    const parsed = JSON.parse(raw);
+    return {
+      name: parsed.name || '',
+      phone: parsed.phone || '',
+      social: parsed.social || ''
+    };
+  } catch {
+    return { name: '', phone: '', social: '' };
+  }
+}
+
 function loadOrCreateGuestId() {
   try {
     const storedGuestId = localStorage.getItem(GUEST_ID_STORAGE_KEY);
@@ -386,6 +406,7 @@ export default function App() {
   const [failedFormatImages, setFailedFormatImages] = useState({});
   const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
   const [guestComment, setGuestComment] = useState('');
+  const [contactData, setContactData] = useState(() => loadStoredContactData());
   const [preparedRequest, setPreparedRequest] = useState(null);
   const [tableNumber, setTableNumber] = useState(() => loadStoredTableNumber());
   const [guestId] = useState(() => loadOrCreateGuestId());
@@ -545,6 +566,12 @@ export default function App() {
   }, [tableNumber]);
 
   useEffect(() => {
+    // Пока контактные данные сохраняются только локально.
+    // Позже здесь можно подключить отправку в Telegram, Google Sheets или заказ.
+    localStorage.setItem(CONTACT_STORAGE_KEY, JSON.stringify(contactData));
+  }, [contactData]);
+
+  useEffect(() => {
     sessionStorage.setItem(MASTER_SESSION_KEY, String(isMaster));
   }, [isMaster]);
 
@@ -557,6 +584,13 @@ export default function App() {
     if (!isMaster || masterTab !== 'history') return;
     refreshMixHistory(historyPeriod);
   }, [historyPeriod, isMaster, masterTab]);
+
+  function updateContactData(field, value) {
+    setContactData((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
 
   const choiceIds = useMemo(() => new Set(choiceItems.map((item) => item.id)), [choiceItems]);
   const selectedFormat = findFormatSelection(selectedFormatId);
@@ -1314,6 +1348,24 @@ export default function App() {
                   Позвать мастера
                 </button>
               </div>
+
+              <div className="guest-contact-card" aria-label="Контактные данные">
+                <span className="guest-contact-title">Контакты</span>
+                <div className="guest-contact-list">
+                  <a href="tel:+79999999999">
+                    <Phone size={17} />
+                    +7 999 999-99-99
+                  </a>
+                  <span>
+                    <MapPin size={17} />
+                    Адрес заведения
+                  </span>
+                  <a href="https://t.me/" target="_blank" rel="noreferrer">
+                    <MessageCircle size={17} />
+                    Telegram / Instagram
+                  </a>
+                </div>
+              </div>
             </div>
 
             <aside className="status-panel" aria-label="Краткая статистика">
@@ -1699,6 +1751,48 @@ export default function App() {
               ))}
             </div>
           )}
+
+          <section className="guest-details-section" aria-label="Контактные данные">
+            <div className="guest-details-heading">
+              <span className="eyebrow">Для связи</span>
+              <h3>Контактные данные</h3>
+            </div>
+            <div className="guest-details-fields">
+              <label className="guest-details-field">
+                <span>Имя</span>
+                <input
+                  type="text"
+                  value={contactData.name}
+                  onChange={(event) => updateContactData('name', event.target.value)}
+                  placeholder="Ваше имя"
+                  autoComplete="name"
+                />
+              </label>
+              <label className="guest-details-field">
+                <span>Телефон</span>
+                <input
+                  type="tel"
+                  value={contactData.phone}
+                  onChange={(event) => updateContactData('phone', event.target.value)}
+                  placeholder="Номер телефона"
+                  autoComplete="tel"
+                />
+              </label>
+              <label className="guest-details-field">
+                <span>Соцсеть</span>
+                <input
+                  type="text"
+                  value={contactData.social}
+                  onChange={(event) => updateContactData('social', event.target.value)}
+                  placeholder="Telegram или Instagram"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+            <p className="guest-details-note">
+              Эти данные пока сохраняются только на этом телефоне. Позже их можно будет подключить к отправке заказа.
+            </p>
+          </section>
 
           <div className="choice-send-row">
             <button className="ghost-button" type="button" onClick={prepareChoiceRequest}>
