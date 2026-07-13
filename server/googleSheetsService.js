@@ -1197,9 +1197,32 @@ function findExactHeaderColumn(headers, variants) {
   return headers.findIndex((header) => variants.includes(header));
 }
 
+function normalizeTobaccoLabel(value) {
+  return normalizeHeader(value).replace(/[:：]+$/g, '').trim();
+}
+
+function isTobaccoDataRow(row, index, schema) {
+  if (index <= schema.headerRowIndex) return false;
+
+  const name = String(row[schema.nameIndex] || '').trim();
+  if (!name) return false;
+
+  const normalizedName = normalizeTobaccoLabel(name);
+  if (TOBACCO_HEADER_VARIANTS.name.includes(normalizedName)) return false;
+
+  const quantity = schema.quantityIndex >= 0
+    ? parseInventoryNumber(row[schema.quantityIndex])
+    : null;
+  const grams = schema.gramsIndex >= 0
+    ? parseInventoryNumber(row[schema.gramsIndex])
+    : null;
+
+  return quantity !== null || grams !== null;
+}
+
 function resolveTobaccoSchema(rows) {
   for (let rowIndex = 0; rowIndex < Math.min(rows.length, 30); rowIndex += 1) {
-    const headers = (rows[rowIndex] || []).map(normalizeHeader);
+    const headers = (rows[rowIndex] || []).map(normalizeTobaccoLabel);
     const nameIndex = findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.name);
     const quantityIndex = findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.quantity);
     const gramsIndex = findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.grams);
@@ -1223,7 +1246,7 @@ function resolveTobaccoSchema(rows) {
 
   if (firstBlockRowIndex >= 0) {
     const headerRowIndex = Math.max(0, firstBlockRowIndex - 1);
-    const legacyHeaders = (rows[headerRowIndex] || []).map(normalizeHeader);
+    const legacyHeaders = (rows[headerRowIndex] || []).map(normalizeTobaccoLabel);
     const gramsIndex = findExactHeaderColumn(legacyHeaders, TOBACCO_HEADER_VARIANTS.grams);
 
     return {
@@ -1237,7 +1260,7 @@ function resolveTobaccoSchema(rows) {
     };
   }
 
-  const headers = (rows[0] || []).map(normalizeHeader);
+  const headers = (rows[0] || []).map(normalizeTobaccoLabel);
   return {
     layout: 'headers',
     headerRowIndex: 0,
@@ -1286,7 +1309,7 @@ export function rowsToTobaccos(rows, sheetName = '') {
   const schema = resolveTobaccoSchema(rows);
   return rows
     .map((row, index) => ({ row, index }))
-    .filter(({ row, index }) => index > schema.headerRowIndex && String(row[schema.nameIndex] || '').trim())
+    .filter(({ row, index }) => isTobaccoDataRow(row, index, schema))
     .map(({ row, index }) => buildTobacco(row, index, schema, sheetName))
     .filter((item) => item.name !== 'Без названия');
 }
