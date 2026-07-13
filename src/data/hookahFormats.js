@@ -71,7 +71,7 @@ export const hookahFormats = [
       {
         id: 'signature-premium',
         title: 'Изнанка',
-        description: 'Эффектная подача для особого впечатления.',
+        description: 'Максимально эффектная подача для особого впечатления.',
         priceLabel: '10 000 ₽',
         image: signatureIznankaImage
       }
