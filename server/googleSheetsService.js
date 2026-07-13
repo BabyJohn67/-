@@ -1220,6 +1220,18 @@ function isTobaccoDataRow(row, index, schema) {
   return quantity !== null || grams !== null;
 }
 
+function isRepeatedTobaccoHeaderRow(row, schema) {
+  const nameLabel = normalizeTobaccoLabel(row[schema.nameIndex]);
+  const quantityLabel = schema.quantityIndex >= 0
+    ? normalizeTobaccoLabel(row[schema.quantityIndex])
+    : '';
+
+  return (
+    TOBACCO_HEADER_VARIANTS.name.includes(nameLabel) &&
+    TOBACCO_HEADER_VARIANTS.quantity.includes(quantityLabel)
+  );
+}
+
 function resolveTobaccoSchema(rows) {
   for (let rowIndex = 0; rowIndex < Math.min(rows.length, 30); rowIndex += 1) {
     const headers = (rows[rowIndex] || []).map(normalizeTobaccoLabel);
@@ -1235,7 +1247,11 @@ function resolveTobaccoSchema(rows) {
         nameIndex,
         quantityIndex,
         gramsIndex,
-        tasteIndex: findExactHeaderColumn(headers, TOBACCO_HEADER_VARIANTS.taste)
+        tasteIndex: findColumn(
+          headers,
+          TOBACCO_HEADER_VARIANTS.taste,
+          gramsIndex >= 0 ? gramsIndex + 1 : quantityIndex + 1
+        )
       };
     }
   }
@@ -1442,12 +1458,24 @@ async function readAndMigrateTobaccoInventory() {
 
   for (let rowIndex = context.schema.headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
-    const name = String(row[context.schema.nameIndex] || '').trim();
-    if (!name) continue;
+    const rowNumber = rowIndex + 1;
 
+    if (isRepeatedTobaccoHeaderRow(row, context.schema)) {
+      if (normalizeTobaccoLabel(row[context.schema.gramsIndex]) !== 'граммы') {
+        rows[rowIndex][context.schema.gramsIndex] = 'Граммы';
+        updates.push({
+          range: `${context.sheetName}!${columnToLetter(context.schema.gramsIndex)}${rowNumber}`,
+          values: [['Граммы']]
+        });
+      }
+      continue;
+    }
+
+    if (!isTobaccoDataRow(row, rowIndex, context.schema)) continue;
+
+    const name = String(row[context.schema.nameIndex] || '').trim();
     const quantityValue = parseInventoryNumber(row[context.schema.quantityIndex]);
     const gramsValue = parseInventoryNumber(row[context.schema.gramsIndex]);
-    const rowNumber = rowIndex + 1;
 
     if (gramsValue === null && quantityValue !== null) {
       const calculatedGrams = calculateGramsByUnits(quantityValue);
