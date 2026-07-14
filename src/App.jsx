@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Heart,
   Lock,
+  LockOpen,
   LogOut,
   MapPin,
   MessageCircle,
@@ -40,6 +41,7 @@ import {
   saveActiveMix,
   saveTobaccoQuantity
 } from './services/api.js';
+import { distributeUnlockedMixPercentages } from './utils/mixPercentages.js';
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
 const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
@@ -752,6 +754,11 @@ export default function App() {
     () => mixDraft.tobaccos.reduce((sum, item) => sum + Number(item.percent || 0), 0),
     [mixDraft.tobaccos]
   );
+  const lockedMixItemCount = useMemo(
+    () => mixDraft.tobaccos.filter((item) => item.locked).length,
+    [mixDraft.tobaccos]
+  );
+  const unlockedMixItemCount = mixDraft.tobaccos.length - lockedMixItemCount;
   const isMixPercentComplete = Math.abs(mixPercentTotal - 100) <= 0.01;
   const mixComponentGrams = useMemo(() => {
     const values = mixDraft.tobaccos.map((item) => calculateMixGrams(item.percent));
@@ -1072,6 +1079,15 @@ export default function App() {
     }));
   }
 
+  function toggleMixItemLock(index) {
+    setMixDraft((current) => ({
+      ...current,
+      tobaccos: current.tobaccos.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, locked: !item.locked } : item
+      ))
+    }));
+  }
+
   function updateMixPercent(index, value) {
     const rawValue = String(value);
 
@@ -1146,7 +1162,8 @@ export default function App() {
       tobaccos: Array.isArray(mix?.tobaccos)
         ? mix.tobaccos.map((item) => ({
             tobaccoId: item.id,
-            percent: Number(item.percent || 0)
+            percent: Number(item.percent || 0),
+            locked: false
           }))
         : [],
       replacingMixId: mix?.id || ''
@@ -1215,7 +1232,7 @@ export default function App() {
       ...current,
       tobaccos: current.tobaccos.some((item) => item.tobaccoId === tobacco.id)
         ? current.tobaccos
-        : [...current.tobaccos, { tobaccoId: tobacco.id, percent: 0 }]
+        : [...current.tobaccos, { tobaccoId: tobacco.id, percent: 0, locked: false }]
     }));
     setMixSearch('');
   }
@@ -1229,19 +1246,11 @@ export default function App() {
 
   function distributeMixEvenly() {
     setMixDraft((current) => {
-      const count = current.tobaccos.length;
-      if (count === 0) return current;
-
-      const totalSteps = 20;
-      const baseSteps = Math.floor(totalSteps / count);
-      const remainder = totalSteps - baseSteps * count;
+      if (current.tobaccos.length === 0) return current;
 
       return {
         ...current,
-        tobaccos: current.tobaccos.map((item, index) => ({
-          ...item,
-          percent: (baseSteps + (index < remainder ? 1 : 0)) * 5
-        }))
+        tobaccos: distributeUnlockedMixPercentages(current.tobaccos)
       };
     });
   }
@@ -2549,11 +2558,11 @@ export default function App() {
                       </div>
                       <button
                         className="ghost-button"
-                        disabled={mixDraft.tobaccos.length === 0}
+                        disabled={unlockedMixItemCount === 0}
                         type="button"
                         onClick={distributeMixEvenly}
                       >
-                        Распределить поровну
+                        {lockedMixItemCount > 0 ? 'Распределить остаток' : 'Распределить поровну'}
                       </button>
                     </div>
 
@@ -2572,6 +2581,9 @@ export default function App() {
                                 <small className="mix-component-usage">
                                   {item.percent || 0}% — {formatInventoryValue(mixComponentGrams[index])} г
                                 </small>
+                                {item.locked && (
+                                  <small className="mix-lock-status">Процент зафиксирован</small>
+                                )}
                               </div>
                               <label>
                                 %
@@ -2581,6 +2593,7 @@ export default function App() {
                                   max="100"
                                   step="5"
                                   type="number"
+                                  disabled={item.locked}
                                   value={item.percent}
                                   onFocus={() => clearZeroMixPercent(index)}
                                   onChange={(event) => updateMixPercent(index, event.target.value)}
@@ -2598,6 +2611,17 @@ export default function App() {
                                   }}
                                 />
                               </label>
+                              <button
+                                className={`ghost-button mix-lock-button ${item.locked ? 'is-locked' : ''}`}
+                                type="button"
+                                aria-label={item.locked ? 'Снять фиксацию процента' : 'Зафиксировать процент'}
+                                aria-pressed={Boolean(item.locked)}
+                                disabled={!item.locked && Number(item.percent || 0) <= 0}
+                                title={item.locked ? 'Снять фиксацию процента' : 'Зафиксировать процент'}
+                                onClick={() => toggleMixItemLock(index)}
+                              >
+                                {item.locked ? <Lock size={17} /> : <LockOpen size={17} />}
+                              </button>
                               <button
                                 className="ghost-button"
                                 type="button"

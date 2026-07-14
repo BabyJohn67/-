@@ -1963,6 +1963,11 @@ h2 {
   font-weight: 800;
 }
 
+.selected-mix-row .mix-lock-status {
+  color: var(--success);
+  font-weight: 900;
+}
+
 .selected-mix-heading {
   display: flex;
   align-items: flex-start;
@@ -1979,7 +1984,7 @@ h2 {
 
 .selected-mix-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 94px 48px;
+  grid-template-columns: minmax(0, 1fr) 94px 48px 48px;
   gap: 10px;
   align-items: end;
   padding: 12px;
@@ -2004,9 +2009,22 @@ h2 {
   outline: 0;
 }
 
+.selected-mix-row input:disabled {
+  border-color: rgba(156, 229, 189, 0.3);
+  color: var(--success);
+  background: rgba(40, 95, 62, 0.18);
+  cursor: not-allowed;
+}
+
 .selected-mix-row .ghost-button {
   min-height: 44px;
   padding: 0;
+}
+
+.selected-mix-row .mix-lock-button.is-locked {
+  border-color: rgba(156, 229, 189, 0.38);
+  color: var(--success);
+  background: rgba(40, 95, 62, 0.18);
 }
 
 .mix-total-card {
