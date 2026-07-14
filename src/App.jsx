@@ -743,6 +743,10 @@ export default function App() {
   }, [masterFilteredTobaccos]);
 
   const hookahNumbers = useMemo(() => hookahUnits.map((unit) => unit.id), []);
+  const activeHookahNumbers = useMemo(
+    () => hookahNumbers.filter((hookahId) => Boolean(activeHookahMixes[hookahId])),
+    [activeHookahMixes, hookahNumbers]
+  );
 
   const mixPercentTotal = useMemo(
     () => mixDraft.tobaccos.reduce((sum, item) => sum + Number(item.percent || 0), 0),
@@ -2235,18 +2239,25 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="active-hookah-grid">
-                  {hookahNumbers.map((hookahId) => {
-                    const mix = activeHookahMixes[hookahId] || null;
-                    const unit = getHookahUnit(hookahId);
+                {isActiveHookahsLoading && activeHookahNumbers.length === 0 ? (
+                  <div className="active-hookah-empty">
+                    Загружаю активные кальяны...
+                  </div>
+                ) : activeHookahNumbers.length === 0 ? (
+                  <div className="active-hookah-empty">
+                    Сейчас активных кальянов нет.
+                  </div>
+                ) : (
+                  <div className="active-hookah-grid">
+                    {activeHookahNumbers.map((hookahId) => {
+                      const mix = activeHookahMixes[hookahId];
+                      const unit = getHookahUnit(hookahId);
 
-                    return (
-                      <article className={`active-hookah-card ${mix ? 'has-mix' : 'is-empty'}`} key={hookahId}>
+                      return (
+                        <article className="active-hookah-card has-mix" key={hookahId}>
                         <div className="active-hookah-card-header">
                           <div>
-                            <span className="active-hookah-status">
-                              {mix ? 'Микс назначен' : 'Микса нет'}
-                            </span>
+                            <span className="active-hookah-status">Микс назначен</span>
                             <h4>Кальян №{hookahId}</h4>
                             {unit?.typeLabel && (
                               <small className="hookah-unit-kind">{unit.typeLabel}</small>
@@ -2260,36 +2271,28 @@ export default function App() {
                           )}
                         </div>
 
-                        {mix ? (
-                          <>
-                            {mix.format && (
-                              <div className="active-hookah-format">
-                                <span>Формат</span>
-                                <strong>{mix.format.title} - {mix.format.variantTitle}</strong>
-                                <small>{mix.format.priceLabel}</small>
-                              </div>
-                            )}
+                        {mix.format && (
+                          <div className="active-hookah-format">
+                            <span>Формат</span>
+                            <strong>{mix.format.title} - {mix.format.variantTitle}</strong>
+                            <small>{mix.format.priceLabel}</small>
+                          </div>
+                        )}
 
-                            <div className="active-hookah-mix-list">
-                              {mix.tobaccos.map((item) => (
-                                <div className="active-hookah-mix-item" key={`${hookahId}-${item.id}-${item.percent}`}>
-                                  <strong>{item.brand} {item.name}</strong>
-                                  <span>{item.percent}%</span>
-                                  <small>{item.taste}</small>
-                                </div>
-                              ))}
+                        <div className="active-hookah-mix-list">
+                          {mix.tobaccos.map((item) => (
+                            <div className="active-hookah-mix-item" key={`${hookahId}-${item.id}-${item.percent}`}>
+                              <strong>{item.brand} {item.name}</strong>
+                              <span>{item.percent}%</span>
+                              <small>{item.taste}</small>
                             </div>
+                          ))}
+                        </div>
 
-                            {mix.comment && (
-                              <div className="active-hookah-comment">
-                                <span>Комментарий</span>
-                                <p>{mix.comment}</p>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="active-hookah-empty">
-                            Для этого кальяна пока не назначен активный микс.
+                        {mix.comment && (
+                          <div className="active-hookah-comment">
+                            <span>Комментарий</span>
+                            <p>{mix.comment}</p>
                           </div>
                         )}
 
@@ -2302,30 +2305,21 @@ export default function App() {
                             <Copy size={17} />
                             Скопировать ссылку
                           </button>
-                          {mix ? (
-                            <button
-                              className="primary-button danger-confirm-button"
-                              disabled={clearingHookahIds.includes(hookahId)}
-                              type="button"
-                              onClick={() => setPendingClearHookahId(hookahId)}
-                            >
-                              <Trash2 size={17} />
-                              {clearingHookahIds.includes(hookahId) ? 'Снимаю' : 'Снять микс'}
-                            </button>
-                          ) : (
-                            <button
-                              className="primary-button"
-                              type="button"
-                              onClick={() => startMixForHookah(hookahId)}
-                            >
-                              Создать микс
-                            </button>
-                          )}
+                          <button
+                            className="primary-button danger-confirm-button"
+                            disabled={clearingHookahIds.includes(hookahId)}
+                            type="button"
+                            onClick={() => setPendingClearHookahId(hookahId)}
+                          >
+                            <Trash2 size={17} />
+                            {clearingHookahIds.includes(hookahId) ? 'Снимаю' : 'Снять микс'}
+                          </button>
                         </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             )}
 
