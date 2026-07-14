@@ -504,6 +504,7 @@ export default function App() {
   const [activeHookahsError, setActiveHookahsError] = useState('');
   const [clearingHookahIds, setClearingHookahIds] = useState([]);
   const [pendingClearHookahId, setPendingClearHookahId] = useState('');
+  const [pendingOccupiedHookahId, setPendingOccupiedHookahId] = useState('');
   const [activeMixStorage, setActiveMixStorage] = useState(null);
   const [mixHistory, setMixHistory] = useState([]);
   const [historyPeriod, setHistoryPeriod] = useState('24h');
@@ -1174,7 +1175,7 @@ export default function App() {
     setMasterTab('order');
   }
 
-  function selectMixHookah(hookahId) {
+  function applyMixHookahSelection(hookahId) {
     setMixDraft((current) => {
       const currentFormat = findFormatSelection(current.formatId);
       const nextFormatId = currentFormat && isFormatAllowedForHookah(currentFormat.format.id, hookahId)
@@ -1185,10 +1186,38 @@ export default function App() {
         ...current,
         hookahId,
         formatId: nextFormatId,
-        replacingMixId: activeHookahMixes[hookahId]?.id || ''
+        replacingMixId: ''
       };
     });
     setPendingMixRequest(null);
+  }
+
+  function selectMixHookah(hookahId) {
+    const occupiedMix = activeHookahMixes[hookahId];
+    const isCurrentActiveMix = (
+      mixDraft.hookahId === hookahId &&
+      mixDraft.replacingMixId &&
+      mixDraft.replacingMixId === occupiedMix?.id
+    );
+
+    if (occupiedMix) {
+      if (isCurrentActiveMix) return;
+      setPendingOccupiedHookahId(hookahId);
+      return;
+    }
+
+    applyMixHookahSelection(hookahId);
+  }
+
+  async function freeOccupiedHookahAndSelect() {
+    const hookahId = pendingOccupiedHookahId;
+    if (!hookahId) return;
+
+    const isCleared = await clearHookahMix(hookahId);
+    if (!isCleared) return;
+
+    setPendingOccupiedHookahId('');
+    applyMixHookahSelection(hookahId);
   }
 
   async function clearHookahMix(hookahId) {
@@ -1646,6 +1675,47 @@ export default function App() {
               >
                 <Trash2 size={17} />
                 {clearingHookahIds.includes(pendingClearHookahId) ? 'Снимаю' : 'Снять микс'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {pendingOccupiedHookahId && (
+        <div className="auth-modal-backdrop" role="presentation">
+          <section className="auth-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="occupied-hookah-title">
+            <div className="auth-modal-header">
+              <div>
+                <span className="eyebrow">Кальян уже используется</span>
+                <h2 id="occupied-hookah-title">Кальян №{pendingOccupiedHookahId} занят</h2>
+              </div>
+              <button
+                className="auth-close-button"
+                type="button"
+                aria-label="Закрыть предупреждение"
+                onClick={() => setPendingOccupiedHookahId('')}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="confirm-modal-copy">
+              На этом кальяне уже назначен активный микс. Чтобы создать для него новый заказ,
+              сначала освободите кальян. Текущий микс будет перенесён в историю заказов.
+            </p>
+
+            <div className="auth-actions">
+              <button className="ghost-button" type="button" onClick={() => setPendingOccupiedHookahId('')}>
+                Отмена
+              </button>
+              <button
+                className="primary-button danger-confirm-button"
+                disabled={clearingHookahIds.includes(pendingOccupiedHookahId)}
+                type="button"
+                onClick={freeOccupiedHookahAndSelect}
+              >
+                <Trash2 size={17} />
+                {clearingHookahIds.includes(pendingOccupiedHookahId) ? 'Освобождаю' : 'Освободить и выбрать'}
               </button>
             </div>
           </section>
@@ -2446,20 +2516,30 @@ export default function App() {
                   <div>
                     {hookahNumbers.map((hookahId) => {
                       const unit = getHookahUnit(hookahId);
+                      const occupiedMix = activeHookahMixes[hookahId];
 
                       return (
                         <button
-                          className={mixDraft.hookahId === hookahId ? 'is-active' : ''}
+                          className={`${mixDraft.hookahId === hookahId ? 'is-active' : ''} ${occupiedMix ? 'is-occupied' : ''}`.trim()}
+                          disabled={isActiveHookahsLoading || Boolean(activeHookahsError)}
                           key={hookahId}
                           type="button"
                           onClick={() => selectMixHookah(hookahId)}
                         >
                           <strong>Кальян №{hookahId}</strong>
-                          <small>{unit?.typeLabel || 'Обычный'}</small>
+                          <small>{occupiedMix ? 'Занят' : unit?.typeLabel || 'Обычный'}</small>
                         </button>
                       );
                     })}
                   </div>
+                  {isActiveHookahsLoading && (
+                    <strong className="hookah-required-note">Проверяю, какие кальяны сейчас заняты...</strong>
+                  )}
+                  {activeHookahsError && (
+                    <strong className="hookah-availability-error">
+                      Не удалось проверить занятость кальянов. Откройте вкладку «Активные кальяны» и нажмите «Обновить».
+                    </strong>
+                  )}
                   {!isHookahSelected && (
                     <strong className="hookah-required-note">
                       Без выбора кальяна заказ сохранить нельзя.

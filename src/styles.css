@@ -1648,6 +1648,17 @@ h2 {
   background: linear-gradient(135deg, var(--gold-soft), var(--gold));
 }
 
+.hookah-number-picker button.is-occupied:not(.is-active) {
+  border-color: rgba(255, 179, 167, 0.42);
+  color: var(--danger);
+  background: rgba(255, 179, 167, 0.1);
+}
+
+.hookah-number-picker button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .master-add-form {
   display: grid;
   grid-template-columns: minmax(160px, 1fr) minmax(180px, 1.1fr) 110px minmax(180px, 1.2fr) auto;
@@ -1894,6 +1905,11 @@ h2 {
 .hookah-required-note {
   color: var(--gold-soft);
   line-height: 1.35;
+}
+
+.hookah-availability-error {
+  color: var(--danger);
+  line-height: 1.4;
 }
 
 .mix-builder-grid {
