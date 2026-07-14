@@ -456,6 +456,7 @@ export default function App() {
   const [masterStatusFilter, setMasterStatusFilter] = useState('all');
   const [masterOnlyProblems, setMasterOnlyProblems] = useState(false);
   const [masterSearch, setMasterSearch] = useState('');
+  const [masterBrandSearches, setMasterBrandSearches] = useState({});
   const [savingIds, setSavingIds] = useState([]);
   const [masterSaveMessage, setMasterSaveMessage] = useState('');
   const [newTobacco, setNewTobacco] = useState({
@@ -2748,18 +2749,40 @@ export default function App() {
                 </label>
 
                 <div className="master-inventory-list">
-                  {masterGroupedTobaccos.map((group) => (
-                    <section className="master-brand-group" key={group.brand}>
-                      <div className="master-brand-heading">
-                        <h3>{group.brand}</h3>
-                        <span>{group.items.length} поз.</span>
-                      </div>
+                  {masterGroupedTobaccos.map((group) => {
+                    const brandSearch = masterBrandSearches[group.brand] || '';
+                    const normalizedBrandSearch = brandSearch.toLowerCase().trim();
+                    const brandItems = normalizedBrandSearch
+                      ? group.items.filter((item) => item.name.toLowerCase().includes(normalizedBrandSearch))
+                      : group.items;
 
-                      <div className="master-row-list">
-                        {group.items.map((item) => {
-                          const status = getMasterStockStatus(item);
-                          return (
-                            <article className={`master-inventory-row stock-${status.type}`} key={item.id}>
+                    return (
+                      <section className="master-brand-group" key={group.brand}>
+                        <div className="master-brand-heading">
+                          <h3>{group.brand}</h3>
+                          <span>
+                            {normalizedBrandSearch ? `${brandItems.length} из ${group.items.length}` : group.items.length} поз.
+                          </span>
+                        </div>
+
+                        <label className="master-brand-search">
+                          <Search size={18} />
+                          <input
+                            type="search"
+                            placeholder={`Найти табак ${group.brand}`}
+                            value={brandSearch}
+                            onChange={(event) => setMasterBrandSearches((current) => ({
+                              ...current,
+                              [group.brand]: event.target.value
+                            }))}
+                          />
+                        </label>
+
+                        <div className="master-row-list">
+                          {brandItems.map((item) => {
+                            const status = getMasterStockStatus(item);
+                            return (
+                              <article className={`master-inventory-row stock-${status.type}`} key={item.id}>
                               <div className="master-row-main">
                                 <span className="master-row-status">{status.label}</span>
                                 <strong>{item.name}</strong>
@@ -2792,12 +2815,19 @@ export default function App() {
                                   {savingIds.includes(item.id) ? 'Сохраняю' : 'Сохранить'}
                                 </button>
                               </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  ))}
+                              </article>
+                            );
+                          })}
+
+                          {brandItems.length === 0 && (
+                            <div className="empty-state master-brand-empty">
+                              В этом бренде ничего не найдено.
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
 
                 {masterFilteredTobaccos.length === 0 && (

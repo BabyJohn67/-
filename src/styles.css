@@ -2388,6 +2388,36 @@ h2 {
   color: var(--muted);
 }
 
+.master-brand-search {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 0 12px;
+  border: 1px solid rgba(242, 207, 131, 0.18);
+  border-radius: 8px;
+  color: var(--gold-soft);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.master-brand-search:focus-within {
+  border-color: rgba(242, 207, 131, 0.48);
+}
+
+.master-brand-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #fff6e4;
+  background: transparent;
+}
+
+.master-brand-empty {
+  padding: 18px;
+}
+
 .master-row-list {
   display: grid;
   gap: 8px;
