@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   BellRing,
   CalendarClock,
+  ChevronDown,
   Copy,
   ExternalLink,
   Heart,
@@ -475,6 +476,7 @@ export default function App() {
   const [masterOnlyProblems, setMasterOnlyProblems] = useState(false);
   const [masterSearch, setMasterSearch] = useState('');
   const [masterBrandSearches, setMasterBrandSearches] = useState({});
+  const [expandedMasterBrands, setExpandedMasterBrands] = useState(() => new Set());
   const [savingIds, setSavingIds] = useState([]);
   const [deletingTobaccoIds, setDeletingTobaccoIds] = useState([]);
   const [pendingDeleteTobacco, setPendingDeleteTobacco] = useState(null);
@@ -1041,6 +1043,15 @@ export default function App() {
     } catch (saveError) {
       setMasterSaveMessage(saveError.message || 'Не удалось добавить позицию');
     }
+  }
+
+  function toggleMasterBrand(brand) {
+    setExpandedMasterBrands((current) => {
+      const next = new Set(current);
+      if (next.has(brand)) next.delete(brand);
+      else next.add(brand);
+      return next;
+    });
   }
 
   function updateMixItem(index, field, value) {
@@ -2833,91 +2844,106 @@ export default function App() {
                   {masterGroupedTobaccos.map((group) => {
                     const brandSearch = masterBrandSearches[group.brand] || '';
                     const normalizedBrandSearch = normalizeSearchValue(brandSearch);
+                    const isExpanded = expandedMasterBrands.has(group.brand);
+                    const brandPanelId = `master-brand-${encodeURIComponent(group.brand)}`;
                     const brandItems = normalizedBrandSearch
                       ? group.items.filter((item) => matchesTobaccoSearch(item, normalizedBrandSearch))
                       : group.items;
 
                     return (
                       <section className="master-brand-group" key={group.brand}>
-                        <div className="master-brand-heading">
-                          <h3>{group.brand}</h3>
+                        <button
+                          className="master-brand-heading"
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-controls={brandPanelId}
+                          onClick={() => toggleMasterBrand(group.brand)}
+                        >
+                          <span className="master-brand-title">
+                            <ChevronDown className={isExpanded ? 'is-expanded' : ''} size={20} />
+                            <h3>{group.brand}</h3>
+                          </span>
                           <span>
                             {normalizedBrandSearch ? `${brandItems.length} из ${group.items.length}` : group.items.length} поз.
                           </span>
-                        </div>
+                        </button>
 
-                        <label className="master-brand-search">
-                          <Search size={18} />
-                          <input
-                            type="search"
-                            placeholder="Найти по названию или вкусу"
-                            value={brandSearch}
-                            onChange={(event) => setMasterBrandSearches((current) => ({
-                              ...current,
-                              [group.brand]: event.target.value
-                            }))}
-                          />
-                        </label>
+                        {isExpanded && (
+                          <div className="master-brand-content" id={brandPanelId}>
+                            <label className="master-brand-search">
+                              <Search size={18} />
+                              <input
+                                type="search"
+                                placeholder="Найти по названию или вкусу"
+                                value={brandSearch}
+                                onChange={(event) => setMasterBrandSearches((current) => ({
+                                  ...current,
+                                  [group.brand]: event.target.value
+                                }))}
+                              />
+                            </label>
 
-                        <div className="master-row-list">
-                          {brandItems.map((item) => {
-                            const status = getMasterStockStatus(item);
-                            return (
-                              <article className={`master-inventory-row stock-${status.type}`} key={item.id}>
-                              <div className="master-row-main">
-                                <span className="master-row-status">{status.label}</span>
-                                <strong>{item.name}</strong>
-                                <small>{item.taste}</small>
-                              </div>
+                            <div className="master-row-list">
+                              {brandItems.map((item) => {
+                                const status = getMasterStockStatus(item);
+                                return (
+                                  <article className={`master-inventory-row stock-${status.type}`} key={item.id}>
+                                  <div className="master-row-main">
+                                    <span className="master-row-status">{status.label}</span>
+                                    <strong>{item.name}</strong>
+                                    <small>{item.taste}</small>
+                                  </div>
 
-                              <div className="master-row-controls">
-                                <span className="inventory-amount-summary">
-                                  <strong>{formatInventoryValue(getInventoryGrams(item))} г</strong>
-                                  <small>{formatInventoryValue(item.quantity, 4)} ед.</small>
-                                </span>
-                                <label>
-                                  Остаток, г
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={item.grams === '' ? '' : getInventoryGrams(item)}
-                                    onFocus={() => clearZeroDraftGrams(item.id)}
-                                    onChange={(event) => updateDraftGrams(item.id, event.target.value)}
-                                    onBlur={() => commitDraftGrams(item.id)}
-                                  />
-                                </label>
-                                <button
-                                  className="ghost-button"
-                                  disabled={savingIds.includes(item.id) || deletingTobaccoIds.includes(item.id)}
-                                  type="button"
-                                  onClick={() => saveQuantityToSheet(item)}
-                                >
-                                  {savingIds.includes(item.id) ? 'Сохраняю' : 'Сохранить'}
-                                </button>
-                                <button
-                                  className="ghost-button inventory-delete-button"
-                                  disabled={savingIds.includes(item.id) || deletingTobaccoIds.includes(item.id)}
-                                  type="button"
-                                  onClick={() => {
-                                    setDeleteTobaccoError('');
-                                    setPendingDeleteTobacco(item);
-                                  }}
-                                >
-                                  <Trash2 size={16} />
-                                  Удалить
-                                </button>
-                              </div>
-                              </article>
-                            );
-                          })}
+                                  <div className="master-row-controls">
+                                    <span className="inventory-amount-summary">
+                                      <strong>{formatInventoryValue(getInventoryGrams(item))} г</strong>
+                                      <small>{formatInventoryValue(item.quantity, 4)} ед.</small>
+                                    </span>
+                                    <label>
+                                      Остаток, г
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={item.grams === '' ? '' : getInventoryGrams(item)}
+                                        onFocus={() => clearZeroDraftGrams(item.id)}
+                                        onChange={(event) => updateDraftGrams(item.id, event.target.value)}
+                                        onBlur={() => commitDraftGrams(item.id)}
+                                      />
+                                    </label>
+                                    <button
+                                      className="ghost-button"
+                                      disabled={savingIds.includes(item.id) || deletingTobaccoIds.includes(item.id)}
+                                      type="button"
+                                      onClick={() => saveQuantityToSheet(item)}
+                                    >
+                                      {savingIds.includes(item.id) ? 'Сохраняю' : 'Сохранить'}
+                                    </button>
+                                    <button
+                                      className="ghost-button inventory-delete-button"
+                                      disabled={savingIds.includes(item.id) || deletingTobaccoIds.includes(item.id)}
+                                      type="button"
+                                      onClick={() => {
+                                        setDeleteTobaccoError('');
+                                        setPendingDeleteTobacco(item);
+                                      }}
+                                    >
+                                      <Trash2 size={16} />
+                                      Удалить
+                                    </button>
+                                  </div>
+                                  </article>
+                                );
+                              })}
 
-                          {brandItems.length === 0 && (
-                            <div className="empty-state master-brand-empty">
-                              В этом бренде ничего не найдено.
+                              {brandItems.length === 0 && (
+                                <div className="empty-state master-brand-empty">
+                                  В этом бренде ничего не найдено.
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </section>
                     );
                   })}
