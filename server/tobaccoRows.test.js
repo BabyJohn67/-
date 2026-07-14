@@ -56,3 +56,15 @@ test('префикс SL относится к бренду StarLine, а не Seb
 
   assert.equal(tobacco.brand, 'StarLine');
 });
+
+test('префиксы SB и SB25 относятся к бренду Sebero', () => {
+  const rows = [
+    ['Наименование', 'Кол/во', 'Граммы', 'Перевод'],
+    ['SB Vanilla', '2', '17', 'Ваниль'],
+    ['SB25 Peanut Latte', '2', '17', 'Арахисовое латте']
+  ];
+
+  const tobaccos = rowsToTobaccos(rows, 'Табаки');
+
+  assert.deepEqual(tobaccos.map((tobacco) => tobacco.brand), ['Sebero', 'Sebero']);
+});
