@@ -305,7 +305,7 @@ function detectBrand(name) {
     ['blackburn', 'BlackBurn'],
     ['od25 ', 'Overdose'],
     ['od ', 'Overdose'],
-    ['sl ', 'Sebero'],
+    ['sl ', 'StarLine'],
     ['mh ', 'Musthave'],
     ['musthave', 'Musthave'],
     ['naш ', 'NAШ'],
