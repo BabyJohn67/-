@@ -943,8 +943,14 @@ export default function App() {
   }
 
   function updateDraftGrams(id, grams) {
-    const normalizedGrams = Math.max(0, Number(grams || 0));
-    const quantity = Math.round((normalizedGrams / GRAMS_PER_UNIT) * 10000) / 10000;
+    const isEmpty = String(grams) === '';
+    const numericGrams = Number(grams);
+    if (!isEmpty && !Number.isFinite(numericGrams)) return;
+
+    const normalizedGrams = isEmpty ? '' : Math.max(0, numericGrams);
+    const quantity = isEmpty
+      ? 0
+      : Math.round((normalizedGrams / GRAMS_PER_UNIT) * 10000) / 10000;
     setTobaccos((current) =>
       current.map((item) =>
         item.id === id
@@ -952,8 +958,28 @@ export default function App() {
               ...item,
               grams: normalizedGrams,
               quantity,
-              inStock: normalizedGrams > 0
+              inStock: Number(normalizedGrams) > 0
             }
+          : item
+      )
+    );
+  }
+
+  function clearZeroDraftGrams(id) {
+    setTobaccos((current) =>
+      current.map((item) =>
+        item.id === id && getInventoryGrams(item) === 0
+          ? { ...item, grams: '' }
+          : item
+      )
+    );
+  }
+
+  function commitDraftGrams(id) {
+    setTobaccos((current) =>
+      current.map((item) =>
+        item.id === id && item.grams === ''
+          ? { ...item, grams: 0, quantity: 0, inStock: false }
           : item
       )
     );
@@ -2628,7 +2654,19 @@ export default function App() {
                       min="0"
                       step="0.01"
                       value={newTobacco.grams}
-                      onChange={(event) => setNewTobacco((current) => ({ ...current, grams: Number(event.target.value || 0) }))}
+                      onFocus={() => setNewTobacco((current) => (
+                        Number(current.grams) === 0 ? { ...current, grams: '' } : current
+                      ))}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setNewTobacco((current) => ({
+                          ...current,
+                          grams: value === '' ? '' : Math.max(0, Number(value))
+                        }));
+                      }}
+                      onBlur={() => setNewTobacco((current) => (
+                        current.grams === '' ? { ...current, grams: 0 } : current
+                      ))}
                     />
                   </label>
 
@@ -2739,8 +2777,10 @@ export default function App() {
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    value={getInventoryGrams(item)}
+                                    value={item.grams === '' ? '' : getInventoryGrams(item)}
+                                    onFocus={() => clearZeroDraftGrams(item.id)}
                                     onChange={(event) => updateDraftGrams(item.id, event.target.value)}
+                                    onBlur={() => commitDraftGrams(item.id)}
                                   />
                                 </label>
                                 <button
