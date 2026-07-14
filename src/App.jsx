@@ -169,6 +169,23 @@ function getBrand(item) {
   return item.brand || item.name.trim().split(/\s+/)[0] || 'Другое';
 }
 
+function normalizeSearchValue(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchesTobaccoSearch(item, searchValue) {
+  const normalizedSearch = normalizeSearchValue(searchValue);
+  if (!normalizedSearch) return true;
+
+  const haystack = normalizeSearchValue(`${getBrand(item)} ${item.name} ${item.taste}`);
+  return normalizedSearch.split(' ').every((word) => haystack.includes(word));
+}
+
 function getStockStatus(item) {
   if (item.quantity <= 0) return { label: 'Скоро появится', type: 'empty' };
   return { label: 'В наличии', type: 'available' };
@@ -650,14 +667,9 @@ export default function App() {
   }, [recommendedTobaccos.length, selectedCategoryIds, tobaccos]);
 
   const listedTobaccos = useMemo(() => {
-    const normalizedQuery = query.toLowerCase().trim();
-
     return tobaccos.filter((item) => {
       const brand = getBrand(item);
-      const matchesQuery =
-        item.name.toLowerCase().includes(normalizedQuery) ||
-        item.taste.toLowerCase().includes(normalizedQuery) ||
-        brand.toLowerCase().includes(normalizedQuery);
+      const matchesQuery = matchesTobaccoSearch(item, query);
       const matchesBrand = selectedBrand === 'all' ? true : brand === selectedBrand;
       const matchesAvailability = onlyAvailable ? item.quantity > 0 : true;
       return matchesQuery && matchesBrand && matchesAvailability;
@@ -704,17 +716,11 @@ export default function App() {
   }, [tobaccos]);
 
   const masterFilteredTobaccos = useMemo(() => {
-    const normalizedSearch = masterSearch.toLowerCase().trim();
-
     return tobaccos.filter((item) => {
       const status = getMasterStockStatus(item).type;
-      const brand = getBrand(item);
       const matchesStatus = masterStatusFilter === 'all' ? true : status === masterStatusFilter;
       const matchesProblems = masterOnlyProblems ? status === 'low' || status === 'empty' : true;
-      const matchesSearch =
-        item.name.toLowerCase().includes(normalizedSearch) ||
-        item.taste.toLowerCase().includes(normalizedSearch) ||
-        brand.toLowerCase().includes(normalizedSearch);
+      const matchesSearch = matchesTobaccoSearch(item, masterSearch);
 
       return matchesStatus && matchesProblems && matchesSearch;
     });
@@ -761,21 +767,14 @@ export default function App() {
   );
 
   const mixSearchResults = useMemo(() => {
-    const normalizedSearch = mixSearch.toLowerCase().trim();
-
-    return tobaccos
+    const normalizedSearch = normalizeSearchValue(mixSearch);
+    const results = tobaccos
       .filter((item) => {
         if (selectedMixIds.has(item.id)) return false;
-        const brand = getBrand(item);
-        const matchesSearch =
-          !normalizedSearch ||
-          item.name.toLowerCase().includes(normalizedSearch) ||
-          item.taste.toLowerCase().includes(normalizedSearch) ||
-          brand.toLowerCase().includes(normalizedSearch);
+        return matchesTobaccoSearch(item, normalizedSearch);
+      });
 
-        return matchesSearch;
-      })
-      .slice(0, 8);
+    return normalizedSearch ? results : results.slice(0, 8);
   }, [mixSearch, selectedMixIds, tobaccos]);
 
   const mixPercentState = useMemo(() => {
@@ -2833,9 +2832,9 @@ export default function App() {
                 <div className="master-inventory-list">
                   {masterGroupedTobaccos.map((group) => {
                     const brandSearch = masterBrandSearches[group.brand] || '';
-                    const normalizedBrandSearch = brandSearch.toLowerCase().trim();
+                    const normalizedBrandSearch = normalizeSearchValue(brandSearch);
                     const brandItems = normalizedBrandSearch
-                      ? group.items.filter((item) => item.name.toLowerCase().includes(normalizedBrandSearch))
+                      ? group.items.filter((item) => matchesTobaccoSearch(item, normalizedBrandSearch))
                       : group.items;
 
                     return (
@@ -2851,7 +2850,7 @@ export default function App() {
                           <Search size={18} />
                           <input
                             type="search"
-                            placeholder={`Найти табак ${group.brand}`}
+                            placeholder="Найти по названию или вкусу"
                             value={brandSearch}
                             onChange={(event) => setMasterBrandSearches((current) => ({
                               ...current,
