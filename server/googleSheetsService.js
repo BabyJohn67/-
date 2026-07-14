@@ -1571,6 +1571,38 @@ export async function updateTobaccoQuantity({ id, quantity, grams: requestedGram
   };
 }
 
+export async function deleteTobaccoFromGoogleApi(id) {
+  const sheets = getSheetsClient();
+  const inventory = await readAndMigrateTobaccoInventory();
+  const tobacco = inventory.tobaccos.find((item) => item.id === id);
+
+  if (!tobacco) {
+    const error = new Error('Позиция не найдена в Google Таблице. Обновите список и попробуйте снова.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const primaryColumnIndexes = [
+    inventory.schema.numberIndex,
+    inventory.schema.nameIndex,
+    inventory.schema.quantityIndex,
+    inventory.schema.gramsIndex,
+    inventory.schema.tasteIndex
+  ].filter((index) => Number.isInteger(index) && index >= 0);
+  const startColumn = columnToLetter(Math.min(...primaryColumnIndexes));
+  const endColumn = columnToLetter(Math.max(...primaryColumnIndexes));
+
+  // Очищаем только основной блок табака. Удаление всей строки сдвинет правую
+  // вспомогательную таблицу и нарушит секции брендов.
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: getSheetId(),
+    range: `${tobacco.sheetName}!${startColumn}${tobacco.rowNumber}:${endColumn}${tobacco.rowNumber}`,
+    requestBody: {}
+  });
+
+  return tobacco;
+}
+
 export async function appendTobacco({ name, quantity, grams: requestedGrams, taste }) {
   const sheets = getSheetsClient();
   const inventory = await readAndMigrateTobaccoInventory();

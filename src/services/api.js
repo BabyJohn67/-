@@ -53,6 +53,22 @@ export async function saveTobaccoQuantity(id, quantity, masterPin, grams) {
   return data.tobacco;
 }
 
+export async function deleteTobacco(id, masterPin) {
+  const response = await fetch(`/api/tobaccos/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: {
+      'x-master-pin': masterPin
+    }
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось удалить табак');
+  }
+
+  return data.tobacco;
+}
+
 export async function addTobacco(tobacco, masterPin) {
   const response = await fetch('/api/tobaccos', {
     method: 'POST',

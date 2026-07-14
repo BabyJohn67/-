@@ -2528,6 +2528,17 @@ h2 {
   cursor: wait;
 }
 
+.master-row-controls .inventory-delete-button {
+  color: var(--danger);
+  border-color: rgba(255, 179, 167, 0.28);
+  background: rgba(255, 179, 167, 0.06);
+}
+
+.master-row-controls .inventory-delete-button:hover:not(:disabled) {
+  border-color: rgba(255, 179, 167, 0.55);
+  background: rgba(255, 179, 167, 0.12);
+}
+
 @media (max-width: 820px) {
   .hero {
     grid-template-columns: 1fr;

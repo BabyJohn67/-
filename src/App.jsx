@@ -30,6 +30,7 @@ import { hookahUnits } from './data/hookahUnits.js';
 import {
   addTobacco,
   clearActiveMix,
+  deleteTobacco,
   loadActiveMixes,
   loadActiveMix,
   loadConfig,
@@ -458,6 +459,9 @@ export default function App() {
   const [masterSearch, setMasterSearch] = useState('');
   const [masterBrandSearches, setMasterBrandSearches] = useState({});
   const [savingIds, setSavingIds] = useState([]);
+  const [deletingTobaccoIds, setDeletingTobaccoIds] = useState([]);
+  const [pendingDeleteTobacco, setPendingDeleteTobacco] = useState(null);
+  const [deleteTobaccoError, setDeleteTobaccoError] = useState('');
   const [masterSaveMessage, setMasterSaveMessage] = useState('');
   const [newTobacco, setNewTobacco] = useState({
     name: '',
@@ -1000,6 +1004,29 @@ export default function App() {
       setMasterSaveMessage(saveError.message || 'Не удалось сохранить изменение');
     } finally {
       setSavingIds((current) => current.filter((id) => id !== item.id));
+    }
+  }
+
+  async function deleteTobaccoFromSheet(item) {
+    setMasterSaveMessage('');
+    setDeleteTobaccoError('');
+    setDeletingTobaccoIds((current) => [...new Set([...current, item.id])]);
+
+    try {
+      await deleteTobacco(item.id, masterPin);
+      setTobaccos((current) => current.filter((tobacco) => tobacco.id !== item.id));
+      setMixDraft((current) => ({
+        ...current,
+        tobaccos: current.tobaccos.filter((tobacco) => tobacco.tobaccoId !== item.id)
+      }));
+      setChoiceItems((current) => current.filter((tobacco) => tobacco.id !== item.id));
+      setPendingDeleteTobacco(null);
+      setDeleteTobaccoError('');
+      setMasterSaveMessage(`Удалено: ${item.name}`);
+    } catch (deleteError) {
+      setDeleteTobaccoError(deleteError.message || 'Не удалось удалить табак');
+    } finally {
+      setDeletingTobaccoIds((current) => current.filter((id) => id !== item.id));
     }
   }
 
@@ -1596,6 +1623,61 @@ export default function App() {
               >
                 <Trash2 size={17} />
                 {clearingHookahIds.includes(pendingClearHookahId) ? 'Снимаю' : 'Снять микс'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {pendingDeleteTobacco && (
+        <div className="auth-modal-backdrop" role="presentation">
+          <section className="auth-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-tobacco-title">
+            <div className="auth-modal-header">
+              <div>
+                <span className="eyebrow">Остатки табаков</span>
+                <h2 id="delete-tobacco-title">Удалить табак?</h2>
+              </div>
+              <button
+                className="auth-close-button"
+                disabled={deletingTobaccoIds.includes(pendingDeleteTobacco.id)}
+                type="button"
+                aria-label="Закрыть подтверждение"
+                onClick={() => {
+                  setPendingDeleteTobacco(null);
+                  setDeleteTobaccoError('');
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="confirm-modal-copy">
+              Вы уверены, что хотите удалить «{pendingDeleteTobacco.name}»? Позиция исчезнет из Google Таблицы
+              и с сайта. Это действие нельзя отменить.
+            </p>
+
+            {deleteTobaccoError && <span className="login-error">{deleteTobaccoError}</span>}
+
+            <div className="auth-actions">
+              <button
+                className="ghost-button"
+                disabled={deletingTobaccoIds.includes(pendingDeleteTobacco.id)}
+                type="button"
+                onClick={() => {
+                  setPendingDeleteTobacco(null);
+                  setDeleteTobaccoError('');
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                className="primary-button danger-confirm-button"
+                disabled={deletingTobaccoIds.includes(pendingDeleteTobacco.id)}
+                type="button"
+                onClick={() => deleteTobaccoFromSheet(pendingDeleteTobacco)}
+              >
+                <Trash2 size={17} />
+                {deletingTobaccoIds.includes(pendingDeleteTobacco.id) ? 'Удаляю' : 'Удалить'}
               </button>
             </div>
           </section>
@@ -2808,11 +2890,23 @@ export default function App() {
                                 </label>
                                 <button
                                   className="ghost-button"
-                                  disabled={savingIds.includes(item.id)}
+                                  disabled={savingIds.includes(item.id) || deletingTobaccoIds.includes(item.id)}
                                   type="button"
                                   onClick={() => saveQuantityToSheet(item)}
                                 >
                                   {savingIds.includes(item.id) ? 'Сохраняю' : 'Сохранить'}
+                                </button>
+                                <button
+                                  className="ghost-button inventory-delete-button"
+                                  disabled={savingIds.includes(item.id) || deletingTobaccoIds.includes(item.id)}
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteTobaccoError('');
+                                    setPendingDeleteTobacco(item);
+                                  }}
+                                >
+                                  <Trash2 size={16} />
+                                  Удалить
                                 </button>
                               </div>
                               </article>

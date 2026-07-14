@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   appendTobacco,
   clearActiveMixFromGoogleApi,
+  deleteTobaccoFromGoogleApi,
   hasGoogleCredentials,
   readAllActiveMixesFromGoogleApi,
   readActiveMixFromGoogleApi,
@@ -480,6 +481,20 @@ app.patch('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
     response.status(500).json({
       message: 'Не удалось сохранить количество в Google Таблицу',
       details: error.message
+    });
+  }
+});
+
+app.delete('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
+  try {
+    const tobacco = await deleteTobaccoFromGoogleApi(request.params.id);
+    response.json({ tobacco, deleted: true });
+  } catch (error) {
+    response.status(Number(error.statusCode) || 500).json({
+      message: error.statusCode === 404
+        ? error.message
+        : 'Не удалось удалить табак из Google Таблицы',
+      details: error.statusCode === 404 ? undefined : error.message
     });
   }
 });
