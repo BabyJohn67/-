@@ -331,6 +331,21 @@ function detectBrand(name) {
   return String(name || 'Другое').trim().split(/\s+/)[0] || 'Другое';
 }
 
+function normalizeBrandKey(value) {
+  const key = String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+
+  const aliases = {
+    разное: 'другое',
+    trofimoffs: 'trofimoff'
+  };
+
+  return aliases[key] || key;
+}
+
 function isTruthyActive(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (!normalized) return true;
@@ -1288,6 +1303,62 @@ function resolveTobaccoSchema(rows) {
   };
 }
 
+export function findTobaccoBrandSlot(rows, name) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const schema = resolveTobaccoSchema(rows);
+  const targetBrandKey = normalizeBrandKey(detectBrand(name));
+  const sectionRows = rows
+    .map((row, index) => ({
+      index,
+      brandKey: normalizeBrandKey(row?.[0])
+    }))
+    .filter(({ brandKey }) => brandKey);
+  const knownBrandKeys = new Set([
+    'darkside', 'blackburn', 'overdose', 'starline', 'musthave', 'naш',
+    'sebero', 'satyr', 'deus', 'bonche', 'jent', 'trofimoff', 'северный', 'другое'
+  ]);
+  const sections = sectionRows.filter(({ brandKey }) => knownBrandKeys.has(brandKey));
+  const targetSectionIndex = sections.findIndex(({ brandKey }) => brandKey === targetBrandKey);
+  const miscSectionIndex = sections.findIndex(({ brandKey }) => brandKey === 'другое');
+  const sectionIndex = targetSectionIndex >= 0 ? targetSectionIndex : miscSectionIndex;
+
+  if (sectionIndex < 0) return null;
+
+  const sectionStart = sections[sectionIndex].index;
+  const sectionEnd = sections[sectionIndex + 1]?.index ?? rows.length;
+  const headerRowIndex = rows.findIndex((row, index) => (
+    index > sectionStart && index < sectionEnd && isRepeatedTobaccoHeaderRow(row, schema)
+  ));
+
+  if (headerRowIndex < 0) return null;
+
+  const candidates = [];
+  let highestNumber = 0;
+
+  for (let index = headerRowIndex + 1; index < sectionEnd; index += 1) {
+    const row = rows[index] || [];
+    const number = schema.numberIndex >= 0 ? Number(row[schema.numberIndex]) : NaN;
+    if (Number.isFinite(number)) highestNumber = Math.max(highestNumber, number);
+
+    const hasName = String(row[schema.nameIndex] || '').trim();
+    if (!hasName) {
+      candidates.push({ index, existingNumber: Number.isFinite(number) ? number : null });
+    }
+  }
+
+  const candidate = candidates.find(({ existingNumber }) => existingNumber !== null) || candidates[0];
+  if (!candidate) return null;
+
+  return {
+    rowIndex: candidate.index,
+    rowNumber: candidate.index + 1,
+    number: candidate.existingNumber ?? highestNumber + 1,
+    schema,
+    brand: detectBrand(name)
+  };
+}
+
 function buildTobacco(row, rowIndex, schema, sheetName = '') {
   const rawQuantity = parseInventoryNumber(row[schema.quantityIndex]);
   const rawGrams = schema.gramsIndex >= 0
@@ -1630,18 +1701,43 @@ export async function appendTobacco({ name, quantity, grams: requestedGrams, tas
     row[inventory.schema.numberIndex] = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
   }
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: getSheetId(),
-    range: `${inventory.sheetName}!A:${columnToLetter(highestColumnIndex)}`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: {
-      values: [row]
-    }
-  });
+  const brandSlot = findTobaccoBrandSlot(inventory.rows, name);
+
+  if (brandSlot) {
+    if (inventory.schema.numberIndex >= 0) row[inventory.schema.numberIndex] = brandSlot.number;
+    const primaryColumnIndexes = [
+      inventory.schema.numberIndex,
+      inventory.schema.nameIndex,
+      inventory.schema.quantityIndex,
+      inventory.schema.gramsIndex,
+      inventory.schema.tasteIndex
+    ].filter((index) => Number.isInteger(index) && index >= 0);
+    const startColumnIndex = Math.min(...primaryColumnIndexes);
+    const endColumnIndex = Math.max(...primaryColumnIndexes);
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: getSheetId(),
+      range: `${inventory.sheetName}!${columnToLetter(startColumnIndex)}${brandSlot.rowNumber}:${columnToLetter(endColumnIndex)}${brandSlot.rowNumber}`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [row.slice(startColumnIndex, endColumnIndex + 1)]
+      }
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: getSheetId(),
+      range: `${inventory.sheetName}!A:${columnToLetter(highestColumnIndex)}`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: {
+        values: [row]
+      }
+    });
+  }
 
   const refreshed = await readTobaccosFromGoogleApi();
-  return [...refreshed].reverse().find((item) => item.name === name && item.taste === taste) || {
+  return refreshed.find((item) => brandSlot && item.rowNumber === brandSlot.rowNumber)
+    || [...refreshed].reverse().find((item) => item.name === name && item.taste === taste) || {
     id: `${Date.now()}-${name}`,
     name,
     brand: detectBrand(name),

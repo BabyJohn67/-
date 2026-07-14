@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rowsToTobaccos } from './googleSheetsService.js';
+import { findTobaccoBrandSlot, rowsToTobaccos } from './googleSheetsService.js';
 
 test('повторные заголовки и пустые разделители не становятся табаками', () => {
   const rows = [
@@ -67,4 +67,32 @@ test('префиксы SB и SB25 относятся к бренду Sebero', ()
   const tobaccos = rowsToTobaccos(rows, 'Табаки');
 
   assert.deepEqual(tobaccos.map((tobacco) => tobacco.brand), ['Sebero', 'Sebero']);
+});
+
+test('новый табак добавляется в свободную строку своего бренда', () => {
+  const rows = [
+    ['Наличие табаков'],
+    ['Darkside'],
+    ['', '№', 'Наименование:', 'Кол/во:', 'Граммы', 'Перевод:'],
+    ['', '1', 'DS Lemon', '2', '17', 'Лимон'],
+    ['', '', '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['SATYR'],
+    ['', '№', 'Наименование:', 'Кол/во:', 'Граммы', 'Перевод:'],
+    ['', '1', 'SATYR Энергетик', '2', '17', 'Энергетик'],
+    ['', '2', '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['Разное'],
+    ['', '№', 'Наименование:', 'Кол/во:', 'Граммы', 'Перевод:'],
+    ['', '1', 'ADALYA Apple', '2', '17', 'Яблоко'],
+    ['', '2', '', '', '', '']
+  ];
+
+  const satyrSlot = findTobaccoBrandSlot(rows, 'SATYR Коктейльная вишня');
+  assert.equal(satyrSlot.rowIndex, 9);
+  assert.equal(satyrSlot.rowNumber, 10);
+  assert.equal(satyrSlot.number, 2);
+  assert.equal(satyrSlot.brand, 'SATYR');
+  assert.equal(findTobaccoBrandSlot(rows, 'DS Darkmint').rowNumber, 5);
+  assert.equal(findTobaccoBrandSlot(rows, 'UNKNOWN Flavor').rowNumber, 15);
 });
