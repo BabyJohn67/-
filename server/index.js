@@ -341,7 +341,7 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
 
 app.post('/api/guest-orders', requireAuth, async (request, response) => {
   try {
-    const result = await createGuestOrder(request.auth.user.id, request.body);
+    const result = await createGuestOrder(request.auth.user.id, request.body, request.auth.token);
     response.status(result.duplicate ? 200 : 201).json(result);
   } catch (error) {
     const statusCode = Number(error.statusCode) || 500;
@@ -354,7 +354,7 @@ app.post('/api/guest-orders', requireAuth, async (request, response) => {
 
 app.get('/api/guest-orders/mine', requireAuth, async (request, response) => {
   try {
-    response.json({ orders: await listOwnGuestOrders(request.auth.user.id) });
+    response.json({ orders: await listOwnGuestOrders(request.auth.user.id, request.auth.token) });
   } catch (error) {
     console.error('[guest-orders] Не удалось загрузить заказы гостя:', error.message);
     response.status(500).json({ message: 'Не удалось загрузить ваши заказы.' });
@@ -370,7 +370,8 @@ app.get('/api/guest-orders', ...requireMaster, async (request, response) => {
   try {
     response.json({
       orders: await listGuestOrders(
-        requestedStatuses.length > 0 ? requestedStatuses : ACTIVE_GUEST_ORDER_STATUSES
+        requestedStatuses.length > 0 ? requestedStatuses : ACTIVE_GUEST_ORDER_STATUSES,
+        request.auth.token
       )
     });
   } catch (error) {
@@ -388,7 +389,8 @@ app.patch('/api/guest-orders/:orderId/status', ...requireMaster, async (request,
       {
         cancelReason: request.body.cancelReason,
         hookahNumber: request.body.hookahNumber
-      }
+      },
+      request.auth.token
     );
     response.json({ order });
   } catch (error) {
@@ -564,7 +566,8 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, respo
           guestOrderId,
           'preparing',
           request.auth?.user?.id || '',
-          { hookahNumber: Number(hookahId) }
+          { hookahNumber: Number(hookahId) },
+          request.auth?.token || ''
         );
       } catch (guestOrderError) {
         guestOrderStatusWarning = 'Кальян создан, но статус гостевой заявки не обновился. Обновите его вручную.';

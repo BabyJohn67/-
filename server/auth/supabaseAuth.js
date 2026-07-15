@@ -45,6 +45,17 @@ export function getSupabaseAdminClient() {
   return adminClient;
 }
 
+export function getSupabaseUserClient(token) {
+  if (!isSupabaseAuthConfigured()) {
+    throw new Error('Supabase Auth не настроен на сервере.');
+  }
+
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+}
+
 export function parseBearerToken(headerValue) {
   const match = String(headerValue || '').match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : '';
@@ -103,13 +114,14 @@ export async function requireAuth(request, response, next) {
   }
 
   try {
-    const { data: userData, error: userError } = await getPublicClient().auth.getUser(token);
+    const userClient = getSupabaseUserClient(token);
+    const { data: userData, error: userError } = await userClient.auth.getUser(token);
     if (userError || !userData.user) {
       response.status(401).json({ message: 'Сессия истекла. Войдите снова.' });
       return;
     }
 
-    const { data: storedProfile, error: profileError } = await getSupabaseAdminClient()
+    const { data: storedProfile, error: profileError } = await userClient
       .from('profiles')
       .select('id,email,name,phone,role,is_active,created_at,updated_at')
       .eq('id', userData.user.id)
@@ -125,7 +137,8 @@ export async function requireAuth(request, response, next) {
 
     request.auth = { token, user: userData.user, profile };
     next();
-  } catch {
+  } catch (error) {
+    console.error('[auth] Не удалось проверить аккаунт:', error.message);
     response.status(503).json({ message: 'Не удалось проверить аккаунт. Повторите позже.' });
   }
 }

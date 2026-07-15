@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getSupabaseAdminClient } from './auth/supabaseAuth.js';
+import { getSupabaseUserClient } from './auth/supabaseAuth.js';
 
 export const GUEST_ORDER_STATUSES = [
   'new',
@@ -87,7 +87,7 @@ export function canTransitionGuestOrder(currentStatus, nextStatus) {
   return Boolean(ALLOWED_TRANSITIONS[currentStatus]?.has(nextStatus));
 }
 
-export async function createGuestOrder(userId, values) {
+export async function createGuestOrder(userId, values, token) {
   const order = normalizeGuestOrderInput(values);
   const validationError = validateGuestOrder(order);
   if (validationError) {
@@ -96,7 +96,7 @@ export async function createGuestOrder(userId, values) {
     throw error;
   }
 
-  const client = getSupabaseAdminClient();
+  const client = getSupabaseUserClient(token);
   const { data: duplicate, error: duplicateError } = await client
     .from('guest_orders')
     .select('*')
@@ -117,8 +117,8 @@ export async function createGuestOrder(userId, values) {
   return { order: data, duplicate: false };
 }
 
-export async function listOwnGuestOrders(userId) {
-  const { data, error } = await getSupabaseAdminClient()
+export async function listOwnGuestOrders(userId, token) {
+  const { data, error } = await getSupabaseUserClient(token)
     .from('guest_orders')
     .select('*')
     .eq('user_id', userId)
@@ -128,8 +128,8 @@ export async function listOwnGuestOrders(userId) {
   return data || [];
 }
 
-export async function listGuestOrders(statuses = ACTIVE_GUEST_ORDER_STATUSES) {
-  let query = getSupabaseAdminClient()
+export async function listGuestOrders(statuses = ACTIVE_GUEST_ORDER_STATUSES, token) {
+  let query = getSupabaseUserClient(token)
     .from('guest_orders')
     .select('*')
     .order('created_at', { ascending: true });
@@ -140,14 +140,14 @@ export async function listGuestOrders(statuses = ACTIVE_GUEST_ORDER_STATUSES) {
   return data || [];
 }
 
-export async function updateGuestOrderStatus(orderId, nextStatus, masterId, values = {}) {
+export async function updateGuestOrderStatus(orderId, nextStatus, masterId, values = {}, token) {
   if (!GUEST_ORDER_STATUSES.includes(nextStatus)) {
     const error = new Error('Неизвестный статус заказа.');
     error.statusCode = 400;
     throw error;
   }
 
-  const client = getSupabaseAdminClient();
+  const client = getSupabaseUserClient(token);
   const { data: current, error: loadError } = await client
     .from('guest_orders')
     .select('*')
