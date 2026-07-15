@@ -58,6 +58,38 @@ export function hasRequiredRole(profile, allowedRoles) {
   );
 }
 
+export function buildDefaultProfile(user) {
+  return {
+    id: user.id,
+    email: String(user.email || '').trim().slice(0, 254),
+    name: String(user.user_metadata?.name || '').trim().slice(0, 100),
+    phone: String(user.user_metadata?.phone || '').trim().slice(0, 40),
+    role: 'guest',
+    is_active: true
+  };
+}
+
+async function ensureUserProfile(user) {
+  const client = getSupabaseAdminClient();
+  const { data, error } = await client
+    .from('profiles')
+    .upsert(buildDefaultProfile(user), { onConflict: 'id', ignoreDuplicates: true })
+    .select('id,email,name,phone,role,is_active,created_at,updated_at')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data) return data;
+
+  const { data: existing, error: loadError } = await client
+    .from('profiles')
+    .select('id,email,name,phone,role,is_active,created_at,updated_at')
+    .eq('id', user.id)
+    .single();
+
+  if (loadError) throw loadError;
+  return existing;
+}
+
 export async function requireAuth(request, response, next) {
   if (!isSupabaseAuthEnabled() || !isSupabaseAuthConfigured()) {
     response.status(503).json({ message: 'Авторизация Supabase пока не настроена.' });
@@ -77,16 +109,14 @@ export async function requireAuth(request, response, next) {
       return;
     }
 
-    const { data: profile, error: profileError } = await getSupabaseAdminClient()
+    const { data: storedProfile, error: profileError } = await getSupabaseAdminClient()
       .from('profiles')
       .select('id,email,name,phone,role,is_active,created_at,updated_at')
       .eq('id', userData.user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      response.status(403).json({ message: 'Профиль пользователя не найден.' });
-      return;
-    }
+    if (profileError) throw profileError;
+    const profile = storedProfile || await ensureUserProfile(userData.user);
 
     if (!profile.is_active) {
       response.status(403).json({ message: 'Этот аккаунт отключён администратором.' });

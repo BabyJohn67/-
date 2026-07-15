@@ -1871,6 +1871,10 @@ export default function App() {
               </div>
             )}
 
+            {guestOrderMessage && (
+              <div className="login-error" role="alert">{guestOrderMessage}</div>
+            )}
+
             <div className="auth-modal-actions">
               {!auth.user ? (
                 <button className="primary-button" type="button" onClick={() => setIsLoginOpen(true)}>
