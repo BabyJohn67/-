@@ -165,3 +165,62 @@ export async function clearActiveMix(hookahId, masterPin) {
 
   return data;
 }
+
+export async function createGuestOrder(order) {
+  const response = await fetch('/api/guest-orders', {
+    method: 'POST',
+    headers: await buildProtectedHeaders('', true),
+    body: JSON.stringify(order)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось отправить заказ');
+  }
+
+  return data;
+}
+
+export async function loadMyGuestOrders() {
+  const response = await fetch('/api/guest-orders/mine', {
+    headers: await buildProtectedHeaders('')
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось загрузить ваши заказы');
+  }
+
+  return data.orders || [];
+}
+
+export async function loadGuestOrders(statuses = []) {
+  const query = statuses.length > 0
+    ? `?statuses=${encodeURIComponent(statuses.join(','))}`
+    : '';
+  const response = await fetch(`/api/guest-orders${query}`, {
+    headers: await buildProtectedHeaders('')
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось загрузить заявки гостей');
+  }
+
+  return data.orders || [];
+}
+
+export async function updateGuestOrderStatus(orderId, status, values = {}) {
+  const response = await fetch(`/api/guest-orders/${encodeURIComponent(orderId)}/status`, {
+    method: 'PATCH',
+    headers: await buildProtectedHeaders('', true),
+    body: JSON.stringify({ status, ...values })
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось обновить заказ');
+  }
+
+  return data.order;
+}

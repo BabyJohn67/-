@@ -32,14 +32,18 @@ import { hookahUnits } from './data/hookahUnits.js';
 import {
   addTobacco,
   clearActiveMix,
+  createGuestOrder,
   deleteTobacco,
   loadActiveMixes,
   loadActiveMix,
   loadConfig,
+  loadGuestOrders,
   loadMixHistory,
+  loadMyGuestOrders,
   loadTobaccos,
   saveActiveMix,
-  saveTobaccoQuantity
+  saveTobaccoQuantity,
+  updateGuestOrderStatus
 } from './services/api.js';
 import { distributeUnlockedMixPercentages } from './utils/mixPercentages.js';
 import AuthModal from './auth/AuthModal.jsx';
@@ -62,6 +66,15 @@ const HISTORY_PERIODS = [
   { id: 'month', label: 'Месяц' },
   { id: 'all', label: 'Все время' }
 ];
+const GUEST_ORDER_STATUS_LABELS = {
+  new: 'Новый',
+  accepted: 'Принят',
+  preparing: 'Готовится',
+  ready: 'Готов',
+  completed: 'Завершён',
+  cancelled: 'Отменён'
+};
+const ACTIVE_GUEST_ORDER_STATUSES = ['new', 'accepted', 'preparing', 'ready'];
 const LEGACY_FORMAT_VARIANT_IDS = {
   'fruit-citrus': 'citrus-fruit',
   'fruit-premium': 'premium-fruit'
@@ -306,17 +319,35 @@ function loadStoredTableNumber() {
 function loadStoredContactData() {
   try {
     const raw = localStorage.getItem(CONTACT_STORAGE_KEY);
-    if (!raw) return { name: '', phone: '', social: '' };
+    if (!raw) return { name: '', phone: '', email: '', social: '' };
 
     const parsed = JSON.parse(raw);
     return {
       name: parsed.name || '',
       phone: parsed.phone || '',
+      email: parsed.email || '',
       social: parsed.social || ''
     };
   } catch {
-    return { name: '', phone: '', social: '' };
+    return { name: '', phone: '', email: '', social: '' };
   }
+}
+
+function formatOrderPrice(value) {
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0))} ₽`;
+}
+
+function createGuestChoiceItems(items) {
+  return distributeUnlockedMixPercentages(
+    items.map((item) => ({
+      id: item.id,
+      brand: item.brand,
+      name: item.name,
+      taste: item.taste,
+      percent: 0,
+      locked: false
+    }))
+  ).map(({ locked, ...item }) => item);
 }
 
 function loadOrCreateGuestId() {
@@ -452,6 +483,10 @@ export default function App() {
   const [guestComment, setGuestComment] = useState('');
   const [contactData, setContactData] = useState(() => loadStoredContactData());
   const [preparedRequest, setPreparedRequest] = useState(null);
+  const [guestOrderMessage, setGuestOrderMessage] = useState('');
+  const [isGuestOrderSubmitting, setIsGuestOrderSubmitting] = useState(false);
+  const [myGuestOrders, setMyGuestOrders] = useState([]);
+  const [isMyOrdersLoading, setIsMyOrdersLoading] = useState(false);
   const [tableNumber, setTableNumber] = useState(() => loadStoredTableNumber());
   const [guestId] = useState(() => loadOrCreateGuestId());
   const [callMasterNotice, setCallMasterNotice] = useState('');
@@ -466,7 +501,13 @@ export default function App() {
     formatId: '',
     comment: '',
     tobaccos: [],
-    replacingMixId: ''
+    replacingMixId: '',
+    guestOrderId: '',
+    strength: '',
+    tableNumber: '',
+    guestName: '',
+    guestPhone: '',
+    guestEmail: ''
   });
   const [isMixSaving, setIsMixSaving] = useState(false);
   const [pendingMixRequest, setPendingMixRequest] = useState(null);
@@ -516,6 +557,10 @@ export default function App() {
   const [historyPeriod, setHistoryPeriod] = useState('24h');
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [guestOrders, setGuestOrders] = useState([]);
+  const [isGuestOrdersLoading, setIsGuestOrdersLoading] = useState(false);
+  const [guestOrdersError, setGuestOrdersError] = useState('');
+  const [updatingGuestOrderIds, setUpdatingGuestOrderIds] = useState([]);
   const isSupabaseAuthActive = auth.enabled;
   const isMaster = isSupabaseAuthActive ? auth.isStaff : legacyIsMaster;
 
@@ -576,6 +621,34 @@ export default function App() {
     }
   }
 
+  async function refreshGuestOrders() {
+    setIsGuestOrdersLoading(true);
+    setGuestOrdersError('');
+    try {
+      setGuestOrders(await loadGuestOrders(ACTIVE_GUEST_ORDER_STATUSES));
+    } catch (loadError) {
+      setGuestOrdersError(loadError.message || 'Не удалось загрузить заявки гостей');
+    } finally {
+      setIsGuestOrdersLoading(false);
+    }
+  }
+
+  async function refreshMyGuestOrders() {
+    if (!auth.user) {
+      setMyGuestOrders([]);
+      return;
+    }
+
+    setIsMyOrdersLoading(true);
+    try {
+      setMyGuestOrders(await loadMyGuestOrders());
+    } catch {
+      setMyGuestOrders([]);
+    } finally {
+      setIsMyOrdersLoading(false);
+    }
+  }
+
   useEffect(() => {
     refreshTobaccos();
     loadConfig().then((config) => {
@@ -589,6 +662,17 @@ export default function App() {
   useEffect(() => {
     if (auth.passwordRecovery) setIsLoginOpen(true);
   }, [auth.passwordRecovery]);
+
+  useEffect(() => {
+    if (!auth.user) return;
+    setContactData((current) => ({
+      ...current,
+      name: current.name || auth.profile?.name || '',
+      phone: current.phone || auth.profile?.phone || '',
+      email: current.email || auth.user.email || ''
+    }));
+    if (!auth.isStaff) refreshMyGuestOrders();
+  }, [auth.user, auth.profile?.name, auth.profile?.phone, auth.isStaff]);
 
   useEffect(() => {
     if (!hookahPageId) return;
@@ -651,6 +735,11 @@ export default function App() {
     if (!isMaster || masterTab !== 'history') return;
     refreshMixHistory(historyPeriod);
   }, [historyPeriod, isMaster, masterTab]);
+
+  useEffect(() => {
+    if (!isMaster || masterTab !== 'guest-orders') return;
+    refreshGuestOrders();
+  }, [isMaster, masterTab]);
 
   function updateContactData(field, value) {
     setContactData((current) => ({
@@ -871,23 +960,65 @@ export default function App() {
   }
 
   function prepareChoiceRequest() {
-    const formatText = selectedFormat
-      ? `${selectedFormat.format.title} — ${selectedFormat.variant.title} (${selectedFormat.variant.priceLabel})`
-      : 'формат не выбран';
-    const choiceText = choiceItems.length > 0
-      ? choiceItems.map((item, index) => `${index + 1}. ${item.brand} ${item.name} - ${item.taste}`).join('\n')
-      : 'гость пока не выбрал конкретные табаки';
+    setGuestOrderMessage('');
+    if (!selectedFormat) {
+      setGuestOrderMessage('Сначала выберите формат кальяна.');
+      document.getElementById('hookah-format')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (choiceItems.length === 0) {
+      setGuestOrderMessage('Добавьте хотя бы один табак в «Мой выбор».');
+      return;
+    }
+    if (!tableNumber.trim()) {
+      setGuestOrderMessage('Укажите номер стола.');
+      return;
+    }
+    if (contactData.name.trim().length < 2) {
+      setGuestOrderMessage('Укажите ваше имя.');
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(contactData.email.trim())) {
+      setGuestOrderMessage('Укажите корректный email.');
+      return;
+    }
 
     setPreparedRequest({
-      type: 'choice',
-      title: 'Запрос по выбранным табакам',
-      text: [
-        `Формат кальяна: ${formatText}`,
-        'Гость выбрал конкретные табаки:',
-        choiceText,
-        guestComment.trim() ? `Комментарий гостя: ${guestComment.trim()}` : 'Комментарий гостя: не указан'
-      ].join('\n')
+      requestId: createInventoryRequestId(),
+      tableNumber: tableNumber.trim(),
+      guestName: contactData.name.trim(),
+      guestPhone: contactData.phone.trim(),
+      guestEmail: contactData.email.trim(),
+      formatId: selectedFormat.format.id,
+      formatName: selectedFormat.format.title,
+      variantId: selectedFormat.variant.id,
+      variantName: selectedFormat.variant.title,
+      priceAtCreation: selectedFormat.variant.priceLabel,
+      strength: selectedStrengthLabel,
+      comment: guestComment.trim(),
+      items: createGuestChoiceItems(choiceItems)
     });
+  }
+
+  async function submitGuestOrder() {
+    if (!preparedRequest || isGuestOrderSubmitting) return;
+    if (!auth.user) {
+      setIsLoginOpen(true);
+      return;
+    }
+
+    setIsGuestOrderSubmitting(true);
+    setGuestOrderMessage('');
+    try {
+      const result = await createGuestOrder(preparedRequest);
+      setPreparedRequest(null);
+      setGuestOrderMessage(`Заказ №${result.order.order_number} отправлен мастеру.`);
+      await refreshMyGuestOrders();
+    } catch (orderError) {
+      setGuestOrderMessage(orderError.message || 'Не удалось отправить заказ.');
+    } finally {
+      setIsGuestOrderSubmitting(false);
+    }
   }
 
   function getPublicOrigin() {
@@ -1194,10 +1325,70 @@ export default function App() {
             locked: false
           }))
         : [],
-      replacingMixId: mix?.id || ''
+      replacingMixId: mix?.id || '',
+      guestOrderId: mix?.guestOrderId || '',
+      strength: '',
+      tableNumber: '',
+      guestName: '',
+      guestPhone: '',
+      guestEmail: ''
     });
     setPendingMixRequest(null);
     setMixSaveMessage('');
+    setLastSavedMix(null);
+    setMasterTab('order');
+  }
+
+  async function changeGuestOrderStatus(order, status, values = {}) {
+    setGuestOrdersError('');
+    setUpdatingGuestOrderIds((current) => [...new Set([...current, order.id])]);
+    try {
+      const updated = await updateGuestOrderStatus(order.id, status, values);
+      setGuestOrders((current) => (
+        ACTIVE_GUEST_ORDER_STATUSES.includes(updated.status)
+          ? current.map((item) => (item.id === updated.id ? updated : item))
+          : current.filter((item) => item.id !== updated.id)
+      ));
+      return updated;
+    } catch (updateError) {
+      setGuestOrdersError(updateError.message || 'Не удалось обновить заказ');
+      return null;
+    } finally {
+      setUpdatingGuestOrderIds((current) => current.filter((id) => id !== order.id));
+    }
+  }
+
+  async function startMixFromGuestOrder(order) {
+    let preparedOrder = order;
+    if (order.status === 'new') {
+      preparedOrder = await changeGuestOrderStatus(order, 'accepted');
+      if (!preparedOrder) return;
+    }
+
+    const formatSelection = findFormatSelection(preparedOrder.variant_id);
+    const availableItems = (preparedOrder.items || []).filter((item) => (
+      tobaccos.some((tobacco) => tobacco.id === item.id)
+    ));
+
+    setMixDraft({
+      hookahId: '',
+      formatId: formatSelection?.variant.id || '',
+      comment: preparedOrder.comment || '',
+      tobaccos: availableItems.map((item) => ({
+        tobaccoId: item.id,
+        percent: Number(item.percent || 0),
+        locked: false
+      })),
+      replacingMixId: '',
+      guestOrderId: preparedOrder.id,
+      strength: preparedOrder.strength || '',
+      tableNumber: preparedOrder.table_number || '',
+      guestName: preparedOrder.guest_name || '',
+      guestPhone: preparedOrder.guest_phone || '',
+      guestEmail: preparedOrder.guest_email || ''
+    });
+    setPendingMixRequest(null);
+    setMixSaveMessage('Заявка перенесена. Выберите свободный физический кальян и проверьте состав.');
     setLastSavedMix(null);
     setMasterTab('order');
   }
@@ -1266,7 +1457,13 @@ export default function App() {
           formatId: '',
           comment: '',
           tobaccos: [],
-          replacingMixId: ''
+          replacingMixId: '',
+          guestOrderId: '',
+          strength: '',
+          tableNumber: '',
+          guestName: '',
+          guestPhone: '',
+          guestEmail: ''
         }));
         setPendingMixRequest(null);
       }
@@ -1388,7 +1585,8 @@ export default function App() {
           },
           comment: mixDraft.comment,
           requestId,
-          expectedActiveMixId: mixDraft.replacingMixId
+          expectedActiveMixId: mixDraft.replacingMixId,
+          guestOrderId: mixDraft.guestOrderId
         },
         masterPin
       );
@@ -1401,6 +1599,7 @@ export default function App() {
       setMixDraft((current) => ({ ...current, replacingMixId: saved.id }));
       setPendingMixRequest(null);
       await refreshTobaccos();
+      if (mixDraft.guestOrderId) await refreshGuestOrders();
     } catch (saveError) {
       setMixSaveMessage(saveError.message || 'Не удалось сохранить микс');
     } finally {
@@ -1621,6 +1820,72 @@ export default function App() {
 
       {isSupabaseAuthActive && (
         <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      )}
+
+      {preparedRequest && !(isLoginOpen && !auth.user) && (
+        <div className="auth-modal-backdrop" role="presentation">
+          <section className="auth-modal guest-order-modal" role="dialog" aria-modal="true" aria-labelledby="guest-order-title">
+            <div className="auth-modal-header">
+              <div>
+                <span className="eyebrow">Проверка заказа</span>
+                <h2 id="guest-order-title">Всё верно?</h2>
+              </div>
+              <button
+                className="auth-close-button"
+                type="button"
+                aria-label="Закрыть подтверждение"
+                onClick={() => setPreparedRequest(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="guest-order-preview">
+              <div><span>Стол</span><strong>№{preparedRequest.tableNumber}</strong></div>
+              <div><span>Гость</span><strong>{preparedRequest.guestName}</strong></div>
+              <div><span>Подача</span><strong>{preparedRequest.variantName}</strong></div>
+              <div><span>Цена</span><strong>{preparedRequest.priceAtCreation}</strong></div>
+              <div><span>Крепость</span><strong>{preparedRequest.strength}</strong></div>
+            </div>
+
+            <div className="guest-order-preview-items">
+              {preparedRequest.items.map((item) => (
+                <div key={item.id}>
+                  <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
+                  <strong>{item.percent}%</strong>
+                </div>
+              ))}
+            </div>
+
+            {preparedRequest.comment && (
+              <div className="guest-order-preview-comment">
+                <span>Комментарий</span>
+                <p>{preparedRequest.comment}</p>
+              </div>
+            )}
+
+            {!auth.user && (
+              <div className="storage-note is-warning">
+                <Lock size={18} />
+                <div><strong>Нужно войти</strong><span>Ваш выбор не пропадёт после входа или регистрации.</span></div>
+              </div>
+            )}
+
+            <div className="auth-modal-actions">
+              {!auth.user ? (
+                <button className="primary-button" type="button" onClick={() => setIsLoginOpen(true)}>
+                  Войти или зарегистрироваться
+                </button>
+              ) : (
+                <button className="primary-button" disabled={isGuestOrderSubmitting} type="button" onClick={submitGuestOrder}>
+                  <Send size={18} />
+                  {isGuestOrderSubmitting ? 'Отправляем…' : 'Подтвердить и отправить'}
+                </button>
+              )}
+              <button className="ghost-button" type="button" onClick={() => setPreparedRequest(null)}>Вернуться к выбору</button>
+            </div>
+          </section>
+        </div>
       )}
 
       {!isSupabaseAuthActive && isLoginOpen && (
@@ -2012,20 +2277,10 @@ export default function App() {
           </div>
 
           <p className="send-note">
-            Пока это только подготовка сообщения на экране. Позже сюда можно подключить Telegram-бота или другой способ отправки.
+            Перед отправкой вы увидите весь заказ и сможете ещё раз его проверить.
           </p>
 
-          {preparedRequest && (
-            <div className="prepared-request" role="status">
-              <div className="prepared-request-heading">
-                <strong>{preparedRequest.title}</strong>
-                <button type="button" onClick={() => setPreparedRequest(null)} aria-label="Закрыть подготовленное сообщение">
-                  <X size={16} />
-                </button>
-              </div>
-              <pre>{preparedRequest.text}</pre>
-            </div>
-          )}
+          {guestOrderMessage && <div className="prepared-request" role="status">{guestOrderMessage}</div>}
         </section>
 
         <section className="recommendation-section" aria-label="Мы рекомендуем">
@@ -2121,6 +2376,16 @@ export default function App() {
                 />
               </label>
               <label className="guest-details-field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={contactData.email}
+                  onChange={(event) => updateContactData('email', event.target.value)}
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                />
+              </label>
+              <label className="guest-details-field">
                 <span>Соцсеть</span>
                 <input
                   type="text"
@@ -2130,9 +2395,19 @@ export default function App() {
                   autoComplete="off"
                 />
               </label>
+              <label className="guest-details-field">
+                <span>Номер стола</span>
+                <input
+                  inputMode="numeric"
+                  type="text"
+                  value={tableNumber}
+                  onChange={(event) => setTableNumber(event.target.value)}
+                  placeholder="Например: 5"
+                />
+              </label>
             </div>
             <p className="guest-details-note">
-              Эти данные пока сохраняются только на этом телефоне. Позже их можно будет подключить к отправке заказа.
+              Данные сохраняются на этом телефоне и используются только для вашего заказа.
             </p>
           </section>
 
@@ -2142,7 +2417,35 @@ export default function App() {
               Отправить мой выбор
             </button>
           </div>
+          {guestOrderMessage && <div className="master-save-message" role="status">{guestOrderMessage}</div>}
         </section>
+
+        {auth.user && !auth.isStaff && (
+          <section className="my-orders-section" aria-label="Мои заказы">
+            <div className="choice-heading">
+              <div><span className="eyebrow">Статус</span><h3>Мои заказы</h3></div>
+              <button className="ghost-button" disabled={isMyOrdersLoading} type="button" onClick={refreshMyGuestOrders}>
+                <RefreshCcw size={17} />
+                Обновить
+              </button>
+            </div>
+            {isMyOrdersLoading ? (
+              <div className="soft-hint">Загружаем ваши заказы…</div>
+            ) : myGuestOrders.length === 0 ? (
+              <div className="soft-hint">Вы ещё не отправляли заказов.</div>
+            ) : (
+              <div className="my-orders-list">
+                {myGuestOrders.map((order) => (
+                  <article className={`my-order-card status-${order.status}`} key={order.id}>
+                    <div><span>Заказ №{order.order_number}</span><strong>{GUEST_ORDER_STATUS_LABELS[order.status] || order.status}</strong></div>
+                    <p>Стол №{order.table_number} · {order.variant_name}</p>
+                    <small>{formatMixDate(order.created_at)}</small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {!isMaster && (
           <section className="call-master-section" id="call-master" aria-label="Позвать мастера">
@@ -2345,10 +2648,11 @@ export default function App() {
             <div className="master-tabs" role="tablist" aria-label="Разделы панели мастера">
               {[
                 ['order', 'Создать заказ'],
+                ['guest-orders', 'Заявки гостей'],
                 ['active', 'Активные кальяны'],
                 ['history', 'История заказов'],
-                ['stock', 'Остатки'],
-                ['qr', 'QR кальянов']
+                ['qr', 'QR кальянов'],
+                ['stock', 'Остатки']
               ].map(([value, label]) => (
                 <button
                   className={masterTab === value ? 'is-active' : ''}
@@ -2360,6 +2664,84 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {masterTab === 'guest-orders' && (
+              <section className="guest-orders-panel" aria-label="Заявки гостей">
+                <div className="master-mix-heading">
+                  <div><span className="eyebrow">Входящие заявки</span><h3>Заявки гостей</h3></div>
+                  <button className="ghost-button" disabled={isGuestOrdersLoading} type="button" onClick={refreshGuestOrders}>
+                    <RefreshCcw size={17} />
+                    {isGuestOrdersLoading ? 'Обновляю' : 'Обновить'}
+                  </button>
+                </div>
+
+                {guestOrdersError && (
+                  <div className="error-banner" role="status">
+                    <div><strong>Не удалось загрузить заявки</strong><span>{guestOrdersError}</span></div>
+                    <button type="button" onClick={refreshGuestOrders}>Повторить</button>
+                  </div>
+                )}
+
+                {isGuestOrdersLoading && guestOrders.length === 0 ? (
+                  <div className="active-hookah-empty">Загружаю заявки гостей…</div>
+                ) : guestOrders.length === 0 ? (
+                  <div className="active-hookah-empty">Активных заявок пока нет.</div>
+                ) : (
+                  <div className="guest-order-grid">
+                    {guestOrders.map((order) => {
+                      const isUpdating = updatingGuestOrderIds.includes(order.id);
+                      return (
+                        <article className={`guest-order-card status-${order.status}`} key={order.id}>
+                          <div className="guest-order-card-header">
+                            <div>
+                              <span className="guest-order-status">{GUEST_ORDER_STATUS_LABELS[order.status] || order.status}</span>
+                              <h4>Заказ №{order.order_number}</h4>
+                            </div>
+                            <strong>Стол №{order.table_number}</strong>
+                          </div>
+
+                          <div className="guest-order-meta">
+                            <div><span>Гость</span><strong>{order.guest_name}</strong><small>{order.guest_phone || 'Телефон не указан'}</small><small>{order.guest_email}</small></div>
+                            <div><span>Подача</span><strong>{order.variant_name}</strong><small>{formatOrderPrice(order.price_at_creation)}</small></div>
+                            <div><span>Крепость</span><strong>{order.strength || 'Не важно'}</strong><small>{formatMixDate(order.created_at)}</small></div>
+                          </div>
+
+                          <div className="guest-order-items">
+                            {(order.items || []).map((item) => (
+                              <div key={`${order.id}-${item.id}`}>
+                                <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
+                                <strong>{item.percent}%</strong>
+                              </div>
+                            ))}
+                          </div>
+
+                          {order.comment && <div className="guest-order-comment"><span>Комментарий</span><p>{order.comment}</p></div>}
+
+                          <div className="guest-order-actions">
+                            {order.status === 'new' && (
+                              <button className="primary-button" disabled={isUpdating} type="button" onClick={() => changeGuestOrderStatus(order, 'accepted')}>Принять</button>
+                            )}
+                            {order.status === 'accepted' && (
+                              <button className="ghost-button" disabled={isUpdating} type="button" onClick={() => changeGuestOrderStatus(order, 'preparing')}>Начать готовить</button>
+                            )}
+                            {['new', 'accepted', 'preparing'].includes(order.status) && (
+                              <button className="primary-button" disabled={isUpdating} type="button" onClick={() => startMixFromGuestOrder(order)}>Создать кальян</button>
+                            )}
+                            {order.status === 'preparing' && (
+                              <button className="ghost-button" disabled={isUpdating} type="button" onClick={() => changeGuestOrderStatus(order, 'ready')}>Готово</button>
+                            )}
+                            {order.status === 'ready' && (
+                              <button className="primary-button" disabled={isUpdating} type="button" onClick={() => changeGuestOrderStatus(order, 'completed')}>Завершить</button>
+                            )}
+                            <button className="ghost-button danger-confirm-button" disabled={isUpdating} type="button" onClick={() => changeGuestOrderStatus(order, 'cancelled')}>Отменить</button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
 
             {masterTab === 'active' && (
               <section className="active-hookahs-panel" aria-label="Активные кальяны">
@@ -2573,6 +2955,13 @@ export default function App() {
                   </div>
                   <span>Сумма: {mixPercentTotal}%</span>
                 </div>
+
+                {mixDraft.guestOrderId && (
+                  <div className="source-guest-order">
+                    <div><span className="eyebrow">Заявка гостя</span><strong>Стол №{mixDraft.tableNumber} · {mixDraft.guestName}</strong></div>
+                    <div><span>Крепость: {mixDraft.strength || 'Не важно'}</span><small>{mixDraft.guestPhone || mixDraft.guestEmail}</small></div>
+                  </div>
+                )}
 
                 <div className="hookah-number-picker" aria-label="Выберите кальян">
                   <div className="hookah-number-heading">

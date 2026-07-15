@@ -26,6 +26,13 @@ import {
   updateOwnProfile,
   updateProfileAsAdmin
 } from './auth/supabaseAuth.js';
+import {
+  ACTIVE_GUEST_ORDER_STATUSES,
+  createGuestOrder,
+  listGuestOrders,
+  listOwnGuestOrders,
+  updateGuestOrderStatus
+} from './guestOrdersService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -332,6 +339,67 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
   }
 });
 
+app.post('/api/guest-orders', requireAuth, async (request, response) => {
+  try {
+    const result = await createGuestOrder(request.auth.user.id, request.body);
+    response.status(result.duplicate ? 200 : 201).json(result);
+  } catch (error) {
+    const statusCode = Number(error.statusCode) || 500;
+    if (statusCode >= 500) console.error('[guest-orders] Не удалось создать заказ:', error.message);
+    response.status(statusCode).json({
+      message: statusCode >= 500 ? 'Не удалось отправить заказ. Повторите позже.' : error.message
+    });
+  }
+});
+
+app.get('/api/guest-orders/mine', requireAuth, async (request, response) => {
+  try {
+    response.json({ orders: await listOwnGuestOrders(request.auth.user.id) });
+  } catch (error) {
+    console.error('[guest-orders] Не удалось загрузить заказы гостя:', error.message);
+    response.status(500).json({ message: 'Не удалось загрузить ваши заказы.' });
+  }
+});
+
+app.get('/api/guest-orders', ...requireMaster, async (request, response) => {
+  const requestedStatuses = String(request.query.statuses || '')
+    .split(',')
+    .map((status) => status.trim())
+    .filter(Boolean);
+
+  try {
+    response.json({
+      orders: await listGuestOrders(
+        requestedStatuses.length > 0 ? requestedStatuses : ACTIVE_GUEST_ORDER_STATUSES
+      )
+    });
+  } catch (error) {
+    console.error('[guest-orders] Не удалось загрузить заявки мастера:', error.message);
+    response.status(500).json({ message: 'Не удалось загрузить заявки гостей.' });
+  }
+});
+
+app.patch('/api/guest-orders/:orderId/status', ...requireMaster, async (request, response) => {
+  try {
+    const order = await updateGuestOrderStatus(
+      request.params.orderId,
+      String(request.body.status || '').trim(),
+      request.auth.user.id,
+      {
+        cancelReason: request.body.cancelReason,
+        hookahNumber: request.body.hookahNumber
+      }
+    );
+    response.json({ order });
+  } catch (error) {
+    const statusCode = Number(error.statusCode) || 500;
+    if (statusCode >= 500) console.error('[guest-orders] Не удалось обновить статус:', error.message);
+    response.status(statusCode).json({
+      message: statusCode >= 500 ? 'Не удалось обновить заказ.' : error.message
+    });
+  }
+});
+
 app.get('/api/hookahs/active-mixes', requireMasterReadAccess, (_request, response) => {
   if (hasGoogleCredentials()) {
     readAllActiveMixesFromGoogleApi()
@@ -419,6 +487,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, respo
   const format = normalizeMixFormat(request.body.format);
   const requestId = String(request.body.requestId || '').trim();
   const expectedActiveMixId = String(request.body.expectedActiveMixId || '').trim();
+  const guestOrderId = String(request.body.guestOrderId || '').trim();
 
   if (!/^\d+$/.test(hookahId)) {
     response.status(400).json({ message: 'Укажите номер кальяна.' });
@@ -477,6 +546,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, respo
     tobaccos: normalizedTobaccos,
     format,
     comment,
+    guestOrderId,
     createdAt: new Date().toISOString()
   };
 
@@ -486,10 +556,27 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, respo
       requestId,
       expectedActiveMixId
     });
+
+    let guestOrderStatusWarning = '';
+    if (guestOrderId) {
+      try {
+        await updateGuestOrderStatus(
+          guestOrderId,
+          'preparing',
+          request.auth?.user?.id || '',
+          { hookahNumber: Number(hookahId) }
+        );
+      } catch (guestOrderError) {
+        guestOrderStatusWarning = 'Кальян создан, но статус гостевой заявки не обновился. Обновите его вручную.';
+        console.error('[guest-orders] Кальян создан, статус заявки не обновлён:', guestOrderError.message);
+      }
+    }
+
     response.json({
       mix: result.mix,
       inventory: result.inventory,
       duplicate: result.duplicate,
+      guestOrderStatusWarning,
       storage: getActiveMixStorageInfo()
     });
   } catch (error) {
