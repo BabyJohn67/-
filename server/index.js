@@ -31,8 +31,10 @@ import {
   createGuestOrder,
   listGuestOrders,
   listOwnGuestOrders,
+  saveGuestOrderTelegramResult,
   updateGuestOrderStatus
 } from './guestOrdersService.js';
+import { sendTelegramNotification } from './services/telegramService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -342,6 +344,22 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
 app.post('/api/guest-orders', requireAuth, async (request, response) => {
   try {
     const result = await createGuestOrder(request.auth.user.id, request.body, request.auth.token);
+
+    if (!result.duplicate) {
+      const telegramResult = await sendTelegramNotification(result.order);
+      if (telegramResult.attempted) {
+        try {
+          result.order = await saveGuestOrderTelegramResult(result.order, telegramResult);
+        } catch (notificationStateError) {
+          console.error('[telegram] Не удалось сохранить результат отправки:', notificationStateError.message);
+        }
+      }
+
+      if (telegramResult.attempted && !telegramResult.sent) {
+        console.warn('[telegram] Заказ сохранён без уведомления:', telegramResult.error);
+      }
+    }
+
     response.status(result.duplicate ? 200 : 201).json(result);
   } catch (error) {
     const statusCode = Number(error.statusCode) || 500;

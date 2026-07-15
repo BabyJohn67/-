@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getSupabaseUserClient } from './auth/supabaseAuth.js';
+import { getSupabaseAdminClient, getSupabaseUserClient } from './auth/supabaseAuth.js';
 
 export const GUEST_ORDER_STATUSES = [
   'new',
@@ -115,6 +115,25 @@ export async function createGuestOrder(userId, values, token) {
 
   if (error) throw error;
   return { order: data, duplicate: false };
+}
+
+export async function saveGuestOrderTelegramResult(order, result) {
+  if (!result?.attempted) return order;
+
+  const attempts = Number(order?.notification_attempts || 0) + 1;
+  const { data, error } = await getSupabaseAdminClient()
+    .from('guest_orders')
+    .update({
+      telegram_sent: Boolean(result.sent),
+      telegram_error: result.sent ? '' : String(result.error || '').slice(0, 500),
+      notification_attempts: attempts
+    })
+    .eq('id', order.id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function listOwnGuestOrders(userId, token) {
