@@ -1,0 +1,170 @@
+# Настройка аккаунтов Hookah Menu
+
+Эта инструкция включает Supabase Auth без резкого удаления старого входа мастера.
+До последнего шага сайт продолжает работать с логином `master` и временным PIN.
+
+## Что уже подготовлено в коде
+
+- регистрация гостя по email и паролю;
+- подтверждение email;
+- вход, выход и восстановление пароля;
+- профиль с именем и телефоном;
+- роли `guest`, `master`, `admin`;
+- блокировка отключённых аккаунтов;
+- серверная проверка `Authorization: Bearer`;
+- защищённые операции мастера и администратора;
+- feature flag для безопасного перехода со старого PIN.
+
+## 1. Создайте проект Supabase
+
+1. Откройте `https://supabase.com/dashboard`.
+2. Нажмите `New project`.
+3. Выберите организацию, название проекта и надёжный пароль базы.
+4. Выберите ближайший регион и дождитесь создания проекта.
+
+Пароль базы, secret key и service role key не отправляйте в чат и не сохраняйте в GitHub.
+
+## 2. Создайте таблицу profiles
+
+1. В Supabase откройте `SQL Editor`.
+2. Нажмите `New query`.
+3. Откройте в проекте файл `supabase/migrations/001_profiles.sql`.
+4. Скопируйте его целиком в SQL Editor.
+5. Нажмите `Run`.
+
+Миграция создаёт профиль автоматически после регистрации. Новому пользователю всегда
+назначается роль `guest`. Через форму регистрации нельзя получить `master` или `admin`.
+
+## 3. Настройте адреса авторизации
+
+В Supabase откройте `Authentication` → `URL Configuration`.
+
+Укажите:
+
+```text
+Site URL: https://hookah-menu-8cqq.onrender.com
+```
+
+Добавьте Redirect URL:
+
+```text
+https://hookah-menu-8cqq.onrender.com/**
+http://127.0.0.1:5173/**
+```
+
+В `Authentication` → `Providers` оставьте включённым Email. Для рабочего режима
+рекомендуется оставить подтверждение email включённым.
+
+## 4. Возьмите API-настройки
+
+В Supabase откройте настройки проекта и раздел API Keys.
+
+Понадобятся:
+
+- Project URL;
+- publishable/anon key;
+- secret/service role key только для backend.
+
+Названия ключей в интерфейсе Supabase могут быть новыми (`publishable` и `secret`) или
+старыми (`anon` и `service_role`). Публичный ключ можно передавать браузеру. Secret или
+service role key должен находиться только в Render.
+
+## 5. Добавьте переменные Render
+
+Откройте Render → сервис `hookah-menu` → `Environment` и добавьте:
+
+```text
+VITE_SUPABASE_URL=<Project URL>
+VITE_SUPABASE_ANON_KEY=<publishable или anon key>
+SUPABASE_URL=<Project URL>
+SUPABASE_ANON_KEY=<publishable или anon key>
+SUPABASE_SERVICE_ROLE_KEY=<secret или service role key>
+VITE_PUBLIC_APP_URL=https://hookah-menu-8cqq.onrender.com
+```
+
+Сначала оставьте флаги выключенными:
+
+```text
+VITE_SUPABASE_AUTH_ENABLED=false
+SUPABASE_AUTH_ENABLED=false
+```
+
+После выполнения SQL, создания первого администратора и теста локальной сборки поменяйте
+оба значения на `true`. Они должны переключаться одновременно.
+
+## 6. Зарегистрируйте первый аккаунт
+
+1. Включите Supabase локально или на тестовом Render.
+2. Нажмите на сайте `Войти` → `Создать аккаунт`.
+3. Введите имя, телефон, email и пароль минимум из 8 символов.
+4. Подтвердите email по ссылке из письма.
+
+Первый аккаунт получит роль `guest`.
+
+## 7. Назначьте первого администратора
+
+Откройте Supabase → `SQL Editor` и выполните запрос, заменив email на свой:
+
+```sql
+update public.profiles
+set role = 'admin', updated_at = now()
+where email = 'ВАШ_EMAIL';
+```
+
+Проверьте результат:
+
+```sql
+select id, email, name, role, is_active
+from public.profiles
+where email = 'ВАШ_EMAIL';
+```
+
+В колонке `role` должно быть `admin`. Выйдите из сайта и войдите снова.
+
+## 8. Создайте мастера
+
+Мастер сначала регистрирует обычный аккаунт. Затем администратор временно назначает роль
+через SQL Editor:
+
+```sql
+update public.profiles
+set role = 'master', updated_at = now()
+where email = 'EMAIL_МАСТЕРА';
+```
+
+Позже управление ролями будет добавлено в административный интерфейс.
+
+## 9. Локальная настройка
+
+Создайте локальный `.env` на основе `.env.example`. Не добавляйте `.env` в Git.
+
+Для локального теста укажите оба флага `true` и заполните Supabase-переменные. Затем:
+
+```bash
+pnpm run dev
+```
+
+Откройте `http://127.0.0.1:5173`.
+
+Проверьте:
+
+1. регистрация создаёт гостя;
+2. после подтверждения email работает вход;
+3. гость не видит панель мастера;
+4. master и admin видят панель;
+5. профиль сохраняет имя и телефон;
+6. восстановление пароля присылает ссылку;
+7. отключённый профиль не получает доступ к защищённым API.
+
+## 10. Безопасное отключение старого PIN
+
+Старый PIN пока сохранён как fallback. Когда Supabase будет проверен на Render:
+
+1. убедитесь, что оба feature flag равны `true`;
+2. проверьте вход admin и master;
+3. проверьте создание микса, остатки, историю и снятие кальяна;
+4. только отдельным следующим этапом удалите `MASTER_PIN`, выдачу PIN через `/api/config`
+   и старый sessionStorage-вход.
+
+Не включайте только один из двух feature flag. Frontend и backend должны переключаться
+на Supabase одновременно.

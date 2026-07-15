@@ -16,6 +16,16 @@ import {
   updateTobaccoQuantity
 } from './googleSheetsService.js';
 import { assertInventoryStorageAvailable } from './inventoryMath.js';
+import {
+  isSupabaseAuthConfigured,
+  isSupabaseAuthEnabled,
+  listProfiles,
+  requireAdmin,
+  requireAuth,
+  requireMaster,
+  updateOwnProfile,
+  updateProfileAsAdmin
+} from './auth/supabaseAuth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -185,6 +195,46 @@ function requireMasterPin(request, response, next) {
   next();
 }
 
+function runMiddlewareChain(middlewares, request, response, next) {
+  let index = 0;
+
+  function run(error) {
+    if (error) {
+      next(error);
+      return;
+    }
+
+    const middleware = middlewares[index];
+    index += 1;
+    if (!middleware) {
+      next();
+      return;
+    }
+
+    middleware(request, response, run);
+  }
+
+  run();
+}
+
+function requireMasterAccess(request, response, next) {
+  if (!isSupabaseAuthEnabled()) {
+    requireMasterPin(request, response, next);
+    return;
+  }
+
+  runMiddlewareChain(requireMaster, request, response, next);
+}
+
+function requireMasterReadAccess(request, response, next) {
+  if (!isSupabaseAuthEnabled()) {
+    next();
+    return;
+  }
+
+  runMiddlewareChain(requireMaster, request, response, next);
+}
+
 function normalizeMixFormat(value) {
   if (!value || typeof value !== 'object') return null;
 
@@ -200,14 +250,89 @@ function normalizeMixFormat(value) {
 }
 
 app.get('/api/config', (_request, response) => {
-  response.json({
-    masterPin: MASTER_PIN,
+  const supabaseEnabled = isSupabaseAuthEnabled();
+  const config = {
     publicSiteUrl: process.env.PUBLIC_SITE_URL || '',
-    activeMixStorage: getActiveMixStorageInfo()
-  });
+    activeMixStorage: getActiveMixStorageInfo(),
+    auth: {
+      mode: supabaseEnabled ? 'supabase' : 'legacy-pin',
+      enabled: supabaseEnabled,
+      configured: isSupabaseAuthConfigured()
+    }
+  };
+
+  if (!supabaseEnabled) {
+    config.masterPin = MASTER_PIN;
+  }
+
+  response.json(config);
 });
 
-app.get('/api/hookahs/active-mixes', (_request, response) => {
+app.get('/api/auth/me', requireAuth, (request, response) => {
+  response.json({ user: request.auth.user, profile: request.auth.profile });
+});
+
+app.patch('/api/auth/profile', requireAuth, async (request, response) => {
+  const name = String(request.body.name || '').trim();
+  const phone = String(request.body.phone || '').trim();
+
+  if (name.length < 2 || name.length > 100) {
+    response.status(400).json({ message: 'Имя должно содержать от 2 до 100 символов.' });
+    return;
+  }
+
+  if (phone.length > 40) {
+    response.status(400).json({ message: 'Номер телефона слишком длинный.' });
+    return;
+  }
+
+  try {
+    const profile = await updateOwnProfile(request.auth.user.id, { name, phone });
+    response.json({ profile });
+  } catch {
+    response.status(500).json({ message: 'Не удалось обновить профиль.' });
+  }
+});
+
+app.get('/api/admin/profiles', ...requireAdmin, async (_request, response) => {
+  try {
+    response.json({ profiles: await listProfiles() });
+  } catch {
+    response.status(500).json({ message: 'Не удалось загрузить пользователей.' });
+  }
+});
+
+app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, response) => {
+  const role = String(request.body.role || '').trim();
+  const isActive = request.body.is_active;
+  const changes = {};
+
+  if (role) {
+    if (!['guest', 'master', 'admin'].includes(role)) {
+      response.status(400).json({ message: 'Неизвестная роль пользователя.' });
+      return;
+    }
+    changes.role = role;
+  }
+
+  if (typeof isActive === 'boolean') {
+    changes.is_active = isActive;
+  }
+
+  if (Object.keys(changes).length === 0) {
+    response.status(400).json({ message: 'Нет изменений для сохранения.' });
+    return;
+  }
+
+  try {
+    const profile = await updateProfileAsAdmin(request.params.profileId, changes);
+    response.json({ profile });
+  } catch {
+    response.status(500).json({ message: 'Не удалось обновить пользователя.' });
+  }
+});
+
+app.get('/api/hookahs/active-mixes', requireMasterReadAccess, (_request, response) => {
   if (hasGoogleCredentials()) {
     readAllActiveMixesFromGoogleApi()
       .then((mixes) => {
@@ -232,7 +357,7 @@ app.get('/api/hookahs/active-mixes', (_request, response) => {
   });
 });
 
-app.get('/api/hookahs/history', (request, response) => {
+app.get('/api/hookahs/history', requireMasterReadAccess, (request, response) => {
   const period = String(request.query.period || '24h');
 
   if (hasGoogleCredentials()) {
@@ -287,7 +412,7 @@ app.get('/api/hookahs/:hookahId/mix', (request, response) => {
   response.json({ hookahId, mix: mixes[hookahId] || null, storage: getActiveMixStorageInfo() });
 });
 
-app.put('/api/hookahs/:hookahId/mix', requireMasterPin, async (request, response) => {
+app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
   const tobaccos = Array.isArray(request.body.tobaccos) ? request.body.tobaccos : [];
   const comment = String(request.body.comment || '').trim();
@@ -381,7 +506,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterPin, async (request, response
   }
 });
 
-app.delete('/api/hookahs/:hookahId/mix', requireMasterPin, (request, response) => {
+app.delete('/api/hookahs/:hookahId/mix', requireMasterAccess, (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
 
   if (!hookahId) {
@@ -459,7 +584,7 @@ app.get('/api/tobaccos', async (_request, response) => {
   }
 });
 
-app.patch('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
+app.patch('/api/tobaccos/:id', requireMasterAccess, async (request, response) => {
   try {
     const quantity = Number(request.body.quantity);
     const hasGrams = request.body.grams !== undefined;
@@ -485,7 +610,7 @@ app.patch('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
   }
 });
 
-app.delete('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
+app.delete('/api/tobaccos/:id', requireMasterAccess, async (request, response) => {
   try {
     const tobacco = await deleteTobaccoFromGoogleApi(request.params.id);
     response.json({ tobacco, deleted: true });
@@ -499,7 +624,7 @@ app.delete('/api/tobaccos/:id', requireMasterPin, async (request, response) => {
   }
 });
 
-app.post('/api/tobaccos', requireMasterPin, async (request, response) => {
+app.post('/api/tobaccos', requireMasterAccess, async (request, response) => {
   try {
     const name = String(request.body.name || '').trim();
     const taste = String(request.body.taste || '').trim();

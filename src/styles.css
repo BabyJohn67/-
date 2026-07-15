@@ -96,7 +96,9 @@ main {
 
 .nav-auth {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .nav-links a {
@@ -126,6 +128,18 @@ main {
   box-shadow: 0 14px 34px rgba(217, 170, 69, 0.18);
   cursor: pointer;
   font-weight: 900;
+}
+
+.login-button:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
+.account-button {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hero {
@@ -377,6 +391,49 @@ h1 {
   color: var(--danger);
   font-weight: 800;
   line-height: 1.4;
+}
+
+.auth-success {
+  color: var(--success);
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.auth-mode-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.auth-mode-switches button {
+  border: 0;
+  padding: 4px 0;
+  color: var(--gold-soft);
+  background: transparent;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.profile-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.profile-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.profile-summary strong {
+  flex: 0 0 auto;
+  color: var(--gold-soft);
 }
 
 .auth-actions {
@@ -1269,6 +1326,9 @@ h2 {
 }
 
 .brand-filter {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
   gap: 8px;
   margin: 0 0 14px;
@@ -2718,11 +2778,17 @@ h2 {
   }
 
   .nav-auth {
+    max-width: 100%;
+    flex-wrap: wrap;
     margin-left: auto;
   }
 
   .login-button {
     min-width: 104px;
+  }
+
+  .account-button {
+    max-width: min(220px, 58vw);
   }
 
   h1 {
