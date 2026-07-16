@@ -349,7 +349,11 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
       return;
     }
 
-    const profile = await updateProfileAsAdmin(request.params.profileId, changes);
+    const profile = await updateProfileAsAdmin(
+      request.auth.token,
+      request.params.profileId,
+      changes
+    );
     response.json({ profile });
   } catch (error) {
     console.error('[admin] Не удалось обновить пользователя:', error.message);

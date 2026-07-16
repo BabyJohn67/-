@@ -203,14 +203,13 @@ export async function listProfiles(token = '') {
   return data || [];
 }
 
-export async function updateProfileAsAdmin(profileId, values) {
-  const { data, error } = await getSupabaseAdminClient()
-    .from('profiles')
-    .update(values)
-    .eq('id', profileId)
-    .select('id,email,name,phone,role,is_active,created_at,updated_at')
-    .single();
+export async function updateProfileAsAdmin(token, profileId, values) {
+  const { data, error } = await getSupabaseUserClient(token).rpc('admin_update_profile', {
+    target_profile_id: profileId,
+    next_role: values.role ?? null,
+    next_is_active: typeof values.is_active === 'boolean' ? values.is_active : null
+  });
 
   if (error) throw error;
-  return data;
+  return Array.isArray(data) ? data[0] : data;
 }
