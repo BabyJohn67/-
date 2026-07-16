@@ -37,6 +37,11 @@ test('Telegram message contains order details and escapes HTML', () => {
   assert.match(message, /Darkside Cola — 100%/);
 });
 
+test('Telegram explains that tobaccos will be selected with the master', () => {
+  const message = formatGuestOrderTelegramMessage({ items: [] });
+  assert.match(message, /<b>Табаки:<\/b>\nне выбраны, подобрать с мастером/);
+});
+
 test('Telegram is skipped when notifications are disabled', async () => {
   process.env.TELEGRAM_ENABLED = 'false';
   const result = await sendTelegramNotification({});

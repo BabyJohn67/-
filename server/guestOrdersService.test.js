@@ -35,6 +35,22 @@ test('guest order input is normalized and validated', () => {
   assert.equal(validateGuestOrder(order), '');
 });
 
+test('guest order without tobaccos is valid', () => {
+  const order = normalizeGuestOrderInput({
+    tableNumber: '7',
+    guestName: 'Игорь',
+    guestEmail: 'guest@example.com',
+    formatId: 'classic',
+    formatName: 'Классический',
+    variantId: 'classic-bowl',
+    variantName: 'Классическая чаша',
+    items: []
+  });
+
+  assert.deepEqual(order.items, []);
+  assert.equal(validateGuestOrder(order), '');
+});
+
 test('guest order requires exactly 100 percent', () => {
   const order = normalizeGuestOrderInput({
     tableNumber: '2',

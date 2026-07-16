@@ -40,7 +40,7 @@ export function formatGuestOrderTelegramMessage(order) {
         const tobaccoName = [item.brand, item.name].filter(Boolean).join(' ');
         return `• ${escapeHtml(tobaccoName)} — ${escapeHtml(item.percent)}%`;
       }).join('\n')
-    : 'Состав не указан';
+    : 'не выбраны, подобрать с мастером';
 
   const orderNumber = order?.order_number || order?.id || '—';
   const comment = escapeHtml(order?.comment) || 'Без комментария';
@@ -57,7 +57,7 @@ export function formatGuestOrderTelegramMessage(order) {
     `<b>Крепость:</b> ${escapeHtml(order?.strength) || 'Не указана'}`,
     `<b>Цена:</b> ${escapeHtml(formatPrice(order?.price_at_creation))}`,
     '',
-    '<b>Состав:</b>',
+    items.length > 0 ? '<b>Состав:</b>' : '<b>Табаки:</b>',
     composition,
     '',
     '<b>Комментарий:</b>',

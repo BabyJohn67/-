@@ -66,7 +66,7 @@ export default function MyOrdersSection({
             <article className={`my-order-card status-${order.status}`} key={order.id}>
               <div><span>Заказ №{order.order_number}</span><strong>{STATUS_LABELS[order.status] || order.status}</strong></div>
               <p>Стол №{order.table_number} · {order.variant_name}</p>
-              {Array.isArray(order.items) && order.items.length > 0 && (
+              {Array.isArray(order.items) && order.items.length > 0 ? (
                 <div className="my-order-items">
                   {order.items.map((item, index) => (
                     <span key={`${order.id}-${item.id || index}`}>
@@ -74,6 +74,8 @@ export default function MyOrdersSection({
                     </span>
                   ))}
                 </div>
+              ) : (
+                <div className="soft-hint">Табаки не выбраны — подобрать с мастером</div>
               )}
               {order.comment && <p className="my-order-comment">{order.comment}</p>}
               <small>{formatDate(order.created_at)}</small>

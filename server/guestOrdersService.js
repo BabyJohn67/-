@@ -74,12 +74,13 @@ export function validateGuestOrder(order) {
   if (order.guest_name.length < 2) return 'Укажите имя гостя.';
   if (!/^\S+@\S+\.\S+$/.test(order.guest_email)) return 'Укажите корректный email.';
   if (!order.format_id || !order.variant_id) return 'Выберите формат кальяна.';
-  if (order.items.length === 0) return 'Добавьте хотя бы один табак.';
   if (order.items.some((item) => !item.id || !item.name || !Number.isFinite(item.percent) || item.percent <= 0)) {
     return 'Проверьте состав заказа.';
   }
-  const total = order.items.reduce((sum, item) => sum + item.percent, 0);
-  if (Math.abs(total - 100) > 0.01) return 'Сумма процентов должна быть ровно 100%.';
+  if (order.items.length > 0) {
+    const total = order.items.reduce((sum, item) => sum + item.percent, 0);
+    if (Math.abs(total - 100) > 0.01) return 'Сумма процентов должна быть ровно 100%.';
+  }
   return '';
 }
 

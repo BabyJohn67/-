@@ -748,10 +748,6 @@ export default function App() {
       document.getElementById('hookah-format')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    if (choiceItems.length === 0) {
-      setGuestOrderMessage('Добавьте хотя бы один табак в «Мой выбор».');
-      return;
-    }
     if (!tableNumber.trim()) {
       setGuestOrderMessage('Укажите номер стола.');
       return;
@@ -1570,14 +1566,18 @@ export default function App() {
               <div><span>Крепость</span><strong>{preparedRequest.strength}</strong></div>
             </div>
 
-            <div className="guest-order-preview-items">
-              {preparedRequest.items.map((item) => (
-                <div key={item.id}>
-                  <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
-                  <strong>{item.percent}%</strong>
-                </div>
-              ))}
-            </div>
+            {preparedRequest.items.length > 0 ? (
+              <div className="guest-order-preview-items">
+                {preparedRequest.items.map((item) => (
+                  <div key={item.id}>
+                    <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
+                    <strong>{item.percent}%</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="soft-hint">Табаки не выбраны — подобрать с мастером</div>
+            )}
 
             {preparedRequest.comment && (
               <div className="guest-order-preview-comment">
@@ -2361,12 +2361,16 @@ export default function App() {
                           </div>
 
                           <div className="guest-order-items">
-                            {(order.items || []).map((item) => (
-                              <div key={`${order.id}-${item.id}`}>
-                                <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
-                                <strong>{item.percent}%</strong>
-                              </div>
-                            ))}
+                            {(order.items || []).length > 0 ? (
+                              order.items.map((item) => (
+                                <div key={`${order.id}-${item.id}`}>
+                                  <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
+                                  <strong>{item.percent}%</strong>
+                                </div>
+                              ))
+                            ) : (
+                              <div>Табаки не выбраны — подобрать с мастером</div>
+                            )}
                           </div>
 
                           {order.comment && <div className="guest-order-comment"><span>Комментарий</span><p>{order.comment}</p></div>}
