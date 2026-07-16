@@ -351,8 +351,7 @@ app.get('/api/guest-orders', ...requireMaster, async (request, response) => {
   try {
     response.json({
       orders: await listGuestOrders(
-        requestedStatuses.length > 0 ? requestedStatuses : ACTIVE_GUEST_ORDER_STATUSES,
-        request.auth.token
+        requestedStatuses.length > 0 ? requestedStatuses : ACTIVE_GUEST_ORDER_STATUSES
       )
     });
   } catch (error) {
@@ -370,8 +369,7 @@ app.patch('/api/guest-orders/:orderId/status', ...requireMaster, async (request,
       {
         cancelReason: request.body.cancelReason,
         hookahNumber: request.body.hookahNumber
-      },
-      request.auth.token
+      }
     );
     response.json({ order });
   } catch (error) {
@@ -547,8 +545,7 @@ app.put('/api/hookahs/:hookahId/mix', ...requireMaster, async (request, response
           guestOrderId,
           'preparing',
           request.auth?.user?.id || '',
-          { hookahNumber: Number(hookahId) },
-          request.auth?.token || ''
+          { hookahNumber: Number(hookahId) }
         );
       } catch (guestOrderError) {
         guestOrderStatusWarning = 'Кальян создан, но статус гостевой заявки не обновился. Обновите его вручную.';

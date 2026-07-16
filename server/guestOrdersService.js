@@ -148,8 +148,8 @@ export async function listOwnGuestOrders(userId, token) {
   return data || [];
 }
 
-export async function listGuestOrders(statuses = ACTIVE_GUEST_ORDER_STATUSES, token) {
-  let query = getSupabaseUserClient(token)
+export async function listGuestOrders(statuses = ACTIVE_GUEST_ORDER_STATUSES) {
+  let query = getSupabaseAdminClient()
     .from('guest_orders')
     .select('*')
     .order('created_at', { ascending: true });
@@ -160,14 +160,14 @@ export async function listGuestOrders(statuses = ACTIVE_GUEST_ORDER_STATUSES, to
   return data || [];
 }
 
-export async function updateGuestOrderStatus(orderId, nextStatus, masterId, values = {}, token) {
+export async function updateGuestOrderStatus(orderId, nextStatus, masterId, values = {}) {
   if (!GUEST_ORDER_STATUSES.includes(nextStatus)) {
     const error = new Error('Неизвестный статус заказа.');
     error.statusCode = 400;
     throw error;
   }
 
-  const client = getSupabaseUserClient(token);
+  const client = getSupabaseAdminClient();
   const { data: current, error: loadError } = await client
     .from('guest_orders')
     .select('*')
