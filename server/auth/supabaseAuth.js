@@ -69,6 +69,27 @@ export function hasRequiredRole(profile, allowedRoles) {
   );
 }
 
+export function validateAdminProfileChange(actorId, targetProfile, profiles, changes) {
+  if (!targetProfile) return 'Пользователь не найден.';
+
+  const removesAdminAccess = targetProfile.role === 'admin' && targetProfile.is_active && (
+    (changes.role && changes.role !== 'admin') || changes.is_active === false
+  );
+
+  if (targetProfile.id === actorId && removesAdminAccess) {
+    return 'Нельзя отключить или понизить собственный аккаунт администратора.';
+  }
+
+  const activeAdminCount = profiles.filter((profile) => (
+    profile.role === 'admin' && profile.is_active
+  )).length;
+  if (removesAdminAccess && activeAdminCount <= 1) {
+    return 'В системе должен остаться хотя бы один активный администратор.';
+  }
+
+  return '';
+}
+
 export function buildDefaultProfile(user) {
   return {
     id: user.id,

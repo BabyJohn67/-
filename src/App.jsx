@@ -40,15 +40,18 @@ import {
   loadGuestOrders,
   loadMixHistory,
   loadMyGuestOrders,
+  loadStaffProfiles,
   loadTobaccos,
   saveActiveMix,
   saveTobaccoQuantity,
-  updateGuestOrderStatus
+  updateGuestOrderStatus,
+  updateStaffProfile
 } from './services/api.js';
 import { distributeUnlockedMixPercentages } from './utils/mixPercentages.js';
 import AuthModal from './auth/AuthModal.jsx';
 import ProfileModal from './auth/ProfileModal.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
+import StaffPanel from './admin/StaffPanel.jsx';
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
 const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
@@ -561,6 +564,10 @@ export default function App() {
   const [isGuestOrdersLoading, setIsGuestOrdersLoading] = useState(false);
   const [guestOrdersError, setGuestOrdersError] = useState('');
   const [updatingGuestOrderIds, setUpdatingGuestOrderIds] = useState([]);
+  const [staffProfiles, setStaffProfiles] = useState([]);
+  const [isStaffProfilesLoading, setIsStaffProfilesLoading] = useState(false);
+  const [staffProfilesError, setStaffProfilesError] = useState('');
+  const [updatingStaffProfileIds, setUpdatingStaffProfileIds] = useState([]);
   const isSupabaseAuthActive = auth.enabled;
   const isMaster = isSupabaseAuthActive ? auth.isStaff : legacyIsMaster;
 
@@ -646,6 +653,35 @@ export default function App() {
       setMyGuestOrders([]);
     } finally {
       setIsMyOrdersLoading(false);
+    }
+  }
+
+  async function refreshStaffProfiles() {
+    if (!auth.isAdmin) return;
+    setIsStaffProfilesLoading(true);
+    setStaffProfilesError('');
+    try {
+      setStaffProfiles(await loadStaffProfiles());
+    } catch (loadError) {
+      setStaffProfilesError(loadError.message || 'Не удалось загрузить сотрудников');
+    } finally {
+      setIsStaffProfilesLoading(false);
+    }
+  }
+
+  async function changeStaffProfile(profile, changes) {
+    setUpdatingStaffProfileIds((current) => [...current, profile.id]);
+    setStaffProfilesError('');
+    try {
+      const updatedProfile = await updateStaffProfile(profile.id, changes);
+      setStaffProfiles((current) => current.map((item) => (
+        item.id === updatedProfile.id ? updatedProfile : item
+      )));
+      setMasterSaveMessage(`Аккаунт ${updatedProfile.name || updatedProfile.email} обновлён.`);
+    } catch (updateError) {
+      setStaffProfilesError(updateError.message || 'Не удалось обновить сотрудника');
+    } finally {
+      setUpdatingStaffProfileIds((current) => current.filter((id) => id !== profile.id));
     }
   }
 
@@ -740,6 +776,11 @@ export default function App() {
     if (!isMaster || masterTab !== 'guest-orders') return;
     refreshGuestOrders();
   }, [isMaster, masterTab]);
+
+  useEffect(() => {
+    if (!isMaster || !auth.isAdmin || masterTab !== 'staff') return;
+    refreshStaffProfiles();
+  }, [auth.isAdmin, isMaster, masterTab]);
 
   function updateContactData(field, value) {
     setContactData((current) => ({
@@ -2656,7 +2697,8 @@ export default function App() {
                 ['active', 'Активные кальяны'],
                 ['history', 'История заказов'],
                 ['qr', 'QR кальянов'],
-                ['stock', 'Остатки']
+                ['stock', 'Остатки'],
+                ...(auth.isAdmin ? [['staff', 'Сотрудники']] : [])
               ].map(([value, label]) => (
                 <button
                   className={masterTab === value ? 'is-active' : ''}
@@ -2668,6 +2710,18 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {masterTab === 'staff' && auth.isAdmin && (
+              <StaffPanel
+                currentUserId={auth.user?.id}
+                error={staffProfilesError}
+                isLoading={isStaffProfilesLoading}
+                onRefresh={refreshStaffProfiles}
+                onUpdate={changeStaffProfile}
+                profiles={staffProfiles}
+                updatingIds={updatingStaffProfileIds}
+              />
+            )}
 
             {masterTab === 'guest-orders' && (
               <section className="guest-orders-panel" aria-label="Заявки гостей">

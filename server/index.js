@@ -23,6 +23,7 @@ import {
   requireAdmin,
   requireAuth,
   requireMaster,
+  validateAdminProfileChange,
   updateOwnProfile,
   updateProfileAsAdmin
 } from './auth/supabaseAuth.js';
@@ -334,6 +335,19 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
   }
 
   try {
+    const profiles = await listProfiles();
+    const targetProfile = profiles.find((profile) => profile.id === request.params.profileId);
+    const validationError = validateAdminProfileChange(
+      request.auth.user.id,
+      targetProfile,
+      profiles,
+      changes
+    );
+    if (validationError) {
+      response.status(targetProfile ? 400 : 404).json({ message: validationError });
+      return;
+    }
+
     const profile = await updateProfileAsAdmin(request.params.profileId, changes);
     response.json({ profile });
   } catch {

@@ -224,3 +224,31 @@ export async function updateGuestOrderStatus(orderId, status, values = {}) {
 
   return data.order;
 }
+
+export async function loadStaffProfiles() {
+  const response = await fetch('/api/admin/profiles', {
+    headers: await buildProtectedHeaders('')
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось загрузить сотрудников');
+  }
+
+  return data.profiles || [];
+}
+
+export async function updateStaffProfile(profileId, changes) {
+  const response = await fetch(`/api/admin/profiles/${encodeURIComponent(profileId)}`, {
+    method: 'PATCH',
+    headers: await buildProtectedHeaders('', true),
+    body: JSON.stringify(changes)
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Не удалось обновить сотрудника');
+  }
+
+  return data.profile;
+}
