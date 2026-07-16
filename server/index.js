@@ -304,10 +304,11 @@ app.patch('/api/auth/profile', requireAuth, async (request, response) => {
   }
 });
 
-app.get('/api/admin/profiles', ...requireAdmin, async (_request, response) => {
+app.get('/api/admin/profiles', ...requireAdmin, async (request, response) => {
   try {
-    response.json({ profiles: await listProfiles() });
-  } catch {
+    response.json({ profiles: await listProfiles(request.auth.token) });
+  } catch (error) {
+    console.error('[admin] Не удалось загрузить пользователей:', error.message);
     response.status(500).json({ message: 'Не удалось загрузить пользователей.' });
   }
 });
@@ -335,7 +336,7 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
   }
 
   try {
-    const profiles = await listProfiles();
+    const profiles = await listProfiles(request.auth.token);
     const targetProfile = profiles.find((profile) => profile.id === request.params.profileId);
     const validationError = validateAdminProfileChange(
       request.auth.user.id,
@@ -350,7 +351,8 @@ app.patch('/api/admin/profiles/:profileId', ...requireAdmin, async (request, res
 
     const profile = await updateProfileAsAdmin(request.params.profileId, changes);
     response.json({ profile });
-  } catch {
+  } catch (error) {
+    console.error('[admin] Не удалось обновить пользователя:', error.message);
     response.status(500).json({ message: 'Не удалось обновить пользователя.' });
   }
 });

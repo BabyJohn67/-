@@ -192,8 +192,9 @@ export async function updateOwnProfile(userId, values) {
   return data;
 }
 
-export async function listProfiles() {
-  const { data, error } = await getSupabaseAdminClient()
+export async function listProfiles(token = '') {
+  const client = token ? getSupabaseUserClient(token) : getSupabaseAdminClient();
+  const { data, error } = await client
     .from('profiles')
     .select('id,email,name,phone,role,is_active,created_at,updated_at')
     .order('created_at', { ascending: false });
