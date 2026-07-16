@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { isSupabaseAuthEnabled, isSupabaseConfigured, supabase } from './supabaseClient.js';
+import { isSupabaseConfigured, supabase } from './supabaseClient.js';
 
 const AuthContext = createContext(null);
 
@@ -10,7 +10,7 @@ function publicAppUrl() {
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(isSupabaseAuthEnabled && isSupabaseConfigured);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
 
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    if (!isSupabaseAuthEnabled || !supabase) {
+    if (!supabase) {
       setLoading(false);
       return undefined;
     }
@@ -123,7 +123,6 @@ export function AuthProvider({ children }) {
   }
 
   const value = useMemo(() => ({
-    enabled: isSupabaseAuthEnabled,
     configured: isSupabaseConfigured,
     loading: loading || profileLoading,
     profileLoading,

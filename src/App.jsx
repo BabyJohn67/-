@@ -56,11 +56,9 @@ import StaffPanel from './admin/StaffPanel.jsx';
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
 const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
 const CONTACT_STORAGE_KEY = 'hookah-menu-contact-data-v1';
-const MASTER_SESSION_KEY = 'hookah-menu-master-enabled-v1';
 const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
-const MASTER_LOGIN = 'master';
 const STANDARD_MIX_GRAMS = 17;
 const HISTORY_PERIODS = [
   { id: '24h', label: '24 часа' },
@@ -301,14 +299,6 @@ function loadStoredFormat() {
   }
 }
 
-function loadStoredMasterSession() {
-  try {
-    return sessionStorage.getItem(MASTER_SESSION_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
 function loadStoredTableNumber() {
   try {
     const tableFromUrl = new URLSearchParams(window.location.search).get('table');
@@ -521,7 +511,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [source, setSource] = useState('fallback');
-  const [legacyIsMaster, setLegacyIsMaster] = useState(() => loadStoredMasterSession());
   const [masterStatusFilter, setMasterStatusFilter] = useState('all');
   const [masterOnlyProblems, setMasterOnlyProblems] = useState(false);
   const [masterSearch, setMasterSearch] = useState('');
@@ -539,12 +528,6 @@ export default function App() {
   });
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [masterCredentials, setMasterCredentials] = useState({
-    login: '',
-    password: ''
-  });
-  const [loginError, setLoginError] = useState('');
-  const [masterPin, setMasterPin] = useState('2580');
   const [masterTab, setMasterTab] = useState('order');
   const [publicSiteUrl, setPublicSiteUrl] = useState('');
   const [serverAuthConfig, setServerAuthConfig] = useState(null);
@@ -568,8 +551,7 @@ export default function App() {
   const [isStaffProfilesLoading, setIsStaffProfilesLoading] = useState(false);
   const [staffProfilesError, setStaffProfilesError] = useState('');
   const [updatingStaffProfileIds, setUpdatingStaffProfileIds] = useState([]);
-  const isSupabaseAuthActive = auth.enabled;
-  const isMaster = isSupabaseAuthActive ? auth.isStaff : legacyIsMaster;
+  const isMaster = auth.isStaff;
 
   async function refreshTobaccos() {
     setIsLoading(true);
@@ -688,7 +670,6 @@ export default function App() {
   useEffect(() => {
     refreshTobaccos();
     loadConfig().then((config) => {
-      setMasterPin(config.masterPin);
       setPublicSiteUrl(config.publicSiteUrl);
       setActiveMixStorage(config.activeMixStorage);
       setServerAuthConfig(config.auth);
@@ -753,14 +734,6 @@ export default function App() {
     // Позже здесь можно подключить отправку в Telegram, Google Sheets или заказ.
     localStorage.setItem(CONTACT_STORAGE_KEY, JSON.stringify(contactData));
   }, [contactData]);
-
-  useEffect(() => {
-    if (!isSupabaseAuthActive) {
-      sessionStorage.setItem(MASTER_SESSION_KEY, String(legacyIsMaster));
-    } else {
-      sessionStorage.removeItem(MASTER_SESSION_KEY);
-    }
-  }, [isSupabaseAuthActive, legacyIsMaster]);
 
   useEffect(() => {
     if (!isMaster) return;
@@ -1111,37 +1084,14 @@ export default function App() {
     document.getElementById('call-master')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  function loginAsMaster(event) {
-    event.preventDefault();
-    const normalizedLogin = masterCredentials.login.trim().toLowerCase();
-
-    if (normalizedLogin === MASTER_LOGIN && masterCredentials.password === masterPin) {
-      setLegacyIsMaster(true);
-      setOnlyAvailable(false);
-      setMasterTab('order');
-      setIsLoginOpen(false);
-      setMasterCredentials({ login: '', password: '' });
-      setLoginError('');
+  async function logoutMaster() {
+    try {
+      await auth.signOut();
+      setIsProfileOpen(false);
+    } catch {
+      setMasterSaveMessage('Не удалось выйти из аккаунта. Повторите ещё раз.');
       return;
     }
-
-    setLoginError('Логин или пароль не подошли. Проверьте данные и попробуйте еще раз.');
-  }
-
-  async function logoutMaster() {
-    if (isSupabaseAuthActive) {
-      try {
-        await auth.signOut();
-        setIsProfileOpen(false);
-      } catch {
-        setMasterSaveMessage('Не удалось выйти из аккаунта. Повторите ещё раз.');
-        return;
-      }
-    } else {
-      setLegacyIsMaster(false);
-    }
-    setMasterCredentials({ login: '', password: '' });
-    setLoginError('');
   }
 
   function updateDraftQuantity(id, quantity) {
@@ -1207,7 +1157,7 @@ export default function App() {
     setSavingIds((current) => [...new Set([...current, item.id])]);
 
     try {
-      const saved = await saveTobaccoQuantity(item.id, item.quantity, masterPin, item.grams);
+      const saved = await saveTobaccoQuantity(item.id, item.quantity, item.grams);
       setTobaccos((current) =>
         current.map((tobacco) => (tobacco.id === item.id ? { ...tobacco, ...saved } : tobacco))
       );
@@ -1225,7 +1175,7 @@ export default function App() {
     setDeletingTobaccoIds((current) => [...new Set([...current, item.id])]);
 
     try {
-      await deleteTobacco(item.id, masterPin);
+      await deleteTobacco(item.id);
       setTobaccos((current) => current.filter((tobacco) => tobacco.id !== item.id));
       setMixDraft((current) => ({
         ...current,
@@ -1247,7 +1197,7 @@ export default function App() {
     setMasterSaveMessage('');
 
     try {
-      const saved = await addTobacco(newTobacco, masterPin);
+      const saved = await addTobacco(newTobacco);
       setTobaccos((current) => [...current, saved]);
       setNewTobacco({ name: '', grams: GRAMS_PER_UNIT, taste: '' });
       setMasterSaveMessage(`Добавлено: ${saved.name}`);
@@ -1484,7 +1434,7 @@ export default function App() {
     setClearingHookahIds((current) => [...new Set([...current, hookahId])]);
 
     try {
-      await clearActiveMix(hookahId, masterPin);
+      await clearActiveMix(hookahId);
       setActiveHookahMixes((current) => ({
         ...current,
         [hookahId]: null
@@ -1628,8 +1578,7 @@ export default function App() {
           requestId,
           expectedActiveMixId: mixDraft.replacingMixId,
           guestOrderId: mixDraft.guestOrderId
-        },
-        masterPin
+        }
       );
       setLastSavedMix(saved);
       setActiveHookahMixes((current) => ({
@@ -1774,35 +1723,23 @@ export default function App() {
             </div>
           )}
           <div className="nav-auth">
-            {isSupabaseAuthActive ? (
-              auth.loading ? (
-                <button className="login-button" disabled type="button">
-                  Проверяю вход
-                </button>
-              ) : auth.user ? (
-                <>
-                  {isMaster && (
-                    <a className="login-button" href="#master">
-                      <ShieldCheck size={17} />
-                      Панель
-                    </a>
-                  )}
-                  <button className="login-button account-button" type="button" onClick={() => setIsProfileOpen(true)}>
-                    <Lock size={17} />
-                    {auth.profile?.name || auth.user.email}
-                  </button>
-                </>
-              ) : (
-                <button className="login-button" type="button" onClick={() => setIsLoginOpen(true)}>
+            {auth.loading ? (
+              <button className="login-button" disabled type="button">
+                Проверяю вход
+              </button>
+            ) : auth.user ? (
+              <>
+                {isMaster && (
+                  <a className="login-button" href="#master">
+                    <ShieldCheck size={17} />
+                    Панель
+                  </a>
+                )}
+                <button className="login-button account-button" type="button" onClick={() => setIsProfileOpen(true)}>
                   <Lock size={17} />
-                  Войти
+                  {auth.profile?.name || auth.user.email}
                 </button>
-              )
-            ) : isMaster ? (
-              <a className="login-button" href="#master">
-                <ShieldCheck size={17} />
-                Панель
-              </a>
+              </>
             ) : (
               <button className="login-button" type="button" onClick={() => setIsLoginOpen(true)}>
                 <Lock size={17} />
@@ -1855,13 +1792,9 @@ export default function App() {
         )}
       </header>
 
-      {isSupabaseAuthActive && (
-        <AuthModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
-      )}
+      <AuthModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
 
-      {isSupabaseAuthActive && (
-        <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-      )}
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 
       {preparedRequest && !(isLoginOpen && !auth.user) && (
         <div className="auth-modal-backdrop" role="presentation">
@@ -1929,76 +1862,6 @@ export default function App() {
               )}
               <button className="ghost-button" type="button" onClick={() => setPreparedRequest(null)}>Вернуться к выбору</button>
             </div>
-          </section>
-        </div>
-      )}
-
-      {!isSupabaseAuthActive && isLoginOpen && (
-        <div className="auth-modal-backdrop" role="presentation">
-          <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
-            <div className="auth-modal-header">
-              <div>
-                <span className="eyebrow">Вход / регистрация</span>
-                <h2 id="auth-modal-title">Вход для персонала</h2>
-              </div>
-              <button
-                className="auth-close-button"
-                type="button"
-                aria-label="Закрыть вход"
-                onClick={() => {
-                  setIsLoginOpen(false);
-                  setLoginError('');
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form className="auth-form" onSubmit={loginAsMaster}>
-              <label>
-                Логин
-                <input
-                  autoComplete="username"
-                  placeholder="master"
-                  type="text"
-                  value={masterCredentials.login}
-                  onChange={(event) =>
-                    setMasterCredentials((current) => ({ ...current, login: event.target.value }))
-                  }
-                />
-              </label>
-
-              <label>
-                Пароль
-                <input
-                  autoComplete="current-password"
-                  placeholder="Введите пароль"
-                  type="password"
-                  value={masterCredentials.password}
-                  onChange={(event) =>
-                    setMasterCredentials((current) => ({ ...current, password: event.target.value }))
-                  }
-                />
-              </label>
-
-              {loginError && <span className="login-error">{loginError}</span>}
-
-              <div className="auth-actions">
-                <button className="primary-button" type="submit">
-                  Войти
-                </button>
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={() => {
-                    setIsLoginOpen(false);
-                    setLoginError('');
-                  }}
-                >
-                  Закрыть
-                </button>
-              </div>
-            </form>
           </section>
         </div>
       )}
@@ -2650,12 +2513,10 @@ export default function App() {
 
             <div className="master-enabled-note">
               <ShieldCheck size={18} />
-              {isSupabaseAuthActive
-                ? `${auth.profile?.name || 'Сотрудник'}: режим ${auth.role === 'admin' ? 'администратора' : 'мастера'} включен`
-                : 'Режим мастера включен'}
+              {`${auth.profile?.name || 'Сотрудник'}: режим ${auth.role === 'admin' ? 'администратора' : 'мастера'} включен`}
             </div>
 
-            {isSupabaseAuthActive && serverAuthConfig && !serverAuthConfig.configured && (
+            {serverAuthConfig && !serverAuthConfig.configured && (
               <div className="storage-note is-warning">
                 <Settings2 size={18} />
                 <div>

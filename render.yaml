@@ -10,8 +10,18 @@ services:
         value: production
       - key: NODE_VERSION
         value: 22
-      - key: MASTER_PIN
-        value: 2580
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: VITE_PUBLIC_APP_URL
+        value: https://hookah-menu-8cqq.onrender.com
       - key: GOOGLE_SHEET_ID
         value: 1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o
       - key: GOOGLE_SHEET_GID

@@ -18,7 +18,6 @@ import {
 import { assertInventoryStorageAvailable } from './inventoryMath.js';
 import {
   isSupabaseAuthConfigured,
-  isSupabaseAuthEnabled,
   listProfiles,
   requireAdmin,
   requireAuth,
@@ -69,7 +68,6 @@ const app = express();
 const PORT = Number(process.env.PORT || 4173);
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || '1Fu330axX0aYehTS7mv9EopnzM_4THrxv2d-aR0NQL4o';
 const SHEET_GID = process.env.GOOGLE_SHEET_GID || '569579743';
-const MASTER_PIN = process.env.MASTER_PIN || '2580';
 const DATA_DIR = path.join(__dirname, 'data');
 const ACTIVE_MIXES_PATH = path.join(DATA_DIR, 'activeMixes.json');
 const MIX_HISTORY_PATH = path.join(DATA_DIR, 'mixHistory.json');
@@ -195,56 +193,6 @@ function parseCsv(text) {
   return rows;
 }
 
-function requireMasterPin(request, response, next) {
-  // Временная защита для записи. Позже здесь лучше подключить нормальную авторизацию мастера.
-  if (request.get('x-master-pin') !== MASTER_PIN) {
-    response.status(401).json({ message: 'Нужен PIN мастера для сохранения изменений.' });
-    return;
-  }
-
-  next();
-}
-
-function runMiddlewareChain(middlewares, request, response, next) {
-  let index = 0;
-
-  function run(error) {
-    if (error) {
-      next(error);
-      return;
-    }
-
-    const middleware = middlewares[index];
-    index += 1;
-    if (!middleware) {
-      next();
-      return;
-    }
-
-    middleware(request, response, run);
-  }
-
-  run();
-}
-
-function requireMasterAccess(request, response, next) {
-  if (!isSupabaseAuthEnabled()) {
-    requireMasterPin(request, response, next);
-    return;
-  }
-
-  runMiddlewareChain(requireMaster, request, response, next);
-}
-
-function requireMasterReadAccess(request, response, next) {
-  if (!isSupabaseAuthEnabled()) {
-    next();
-    return;
-  }
-
-  runMiddlewareChain(requireMaster, request, response, next);
-}
-
 function normalizeMixFormat(value) {
   if (!value || typeof value !== 'object') return null;
 
@@ -260,20 +208,15 @@ function normalizeMixFormat(value) {
 }
 
 app.get('/api/config', (_request, response) => {
-  const supabaseEnabled = isSupabaseAuthEnabled();
   const config = {
     publicSiteUrl: process.env.PUBLIC_SITE_URL || '',
     activeMixStorage: getActiveMixStorageInfo(),
     auth: {
-      mode: supabaseEnabled ? 'supabase' : 'legacy-pin',
-      enabled: supabaseEnabled,
+      mode: 'supabase',
+      enabled: true,
       configured: isSupabaseAuthConfigured()
     }
   };
-
-  if (!supabaseEnabled) {
-    config.masterPin = MASTER_PIN;
-  }
 
   response.json(config);
 });
@@ -440,7 +383,7 @@ app.patch('/api/guest-orders/:orderId/status', ...requireMaster, async (request,
   }
 });
 
-app.get('/api/hookahs/active-mixes', requireMasterReadAccess, (_request, response) => {
+app.get('/api/hookahs/active-mixes', ...requireMaster, (_request, response) => {
   if (hasGoogleCredentials()) {
     readAllActiveMixesFromGoogleApi()
       .then((mixes) => {
@@ -465,7 +408,7 @@ app.get('/api/hookahs/active-mixes', requireMasterReadAccess, (_request, respons
   });
 });
 
-app.get('/api/hookahs/history', requireMasterReadAccess, (request, response) => {
+app.get('/api/hookahs/history', ...requireMaster, (request, response) => {
   const period = String(request.query.period || '24h');
 
   if (hasGoogleCredentials()) {
@@ -520,7 +463,7 @@ app.get('/api/hookahs/:hookahId/mix', (request, response) => {
   response.json({ hookahId, mix: mixes[hookahId] || null, storage: getActiveMixStorageInfo() });
 });
 
-app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, response) => {
+app.put('/api/hookahs/:hookahId/mix', ...requireMaster, async (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
   const tobaccos = Array.isArray(request.body.tobaccos) ? request.body.tobaccos : [];
   const comment = String(request.body.comment || '').trim();
@@ -634,7 +577,7 @@ app.put('/api/hookahs/:hookahId/mix', requireMasterAccess, async (request, respo
   }
 });
 
-app.delete('/api/hookahs/:hookahId/mix', requireMasterAccess, (request, response) => {
+app.delete('/api/hookahs/:hookahId/mix', ...requireMaster, (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
 
   if (!hookahId) {
@@ -712,7 +655,7 @@ app.get('/api/tobaccos', async (_request, response) => {
   }
 });
 
-app.patch('/api/tobaccos/:id', requireMasterAccess, async (request, response) => {
+app.patch('/api/tobaccos/:id', ...requireMaster, async (request, response) => {
   try {
     const quantity = Number(request.body.quantity);
     const hasGrams = request.body.grams !== undefined;
@@ -738,7 +681,7 @@ app.patch('/api/tobaccos/:id', requireMasterAccess, async (request, response) =>
   }
 });
 
-app.delete('/api/tobaccos/:id', requireMasterAccess, async (request, response) => {
+app.delete('/api/tobaccos/:id', ...requireMaster, async (request, response) => {
   try {
     const tobacco = await deleteTobaccoFromGoogleApi(request.params.id);
     response.json({ tobacco, deleted: true });
@@ -752,7 +695,7 @@ app.delete('/api/tobaccos/:id', requireMasterAccess, async (request, response) =
   }
 });
 
-app.post('/api/tobaccos', requireMasterAccess, async (request, response) => {
+app.post('/api/tobaccos', ...requireMaster, async (request, response) => {
   try {
     const name = String(request.body.name || '').trim();
     const taste = String(request.body.taste || '').trim();

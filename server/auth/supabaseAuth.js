@@ -5,10 +5,6 @@ const ALLOWED_ROLES = new Set(['guest', 'master', 'admin']);
 let publicClient;
 let adminClient;
 
-export function isSupabaseAuthEnabled() {
-  return String(process.env.SUPABASE_AUTH_ENABLED || '').toLowerCase() === 'true';
-}
-
 export function isSupabaseAuthConfigured() {
   return Boolean(
     process.env.SUPABASE_URL &&
@@ -123,7 +119,7 @@ async function ensureUserProfile(user) {
 }
 
 export async function requireAuth(request, response, next) {
-  if (!isSupabaseAuthEnabled() || !isSupabaseAuthConfigured()) {
+  if (!isSupabaseAuthConfigured()) {
     response.status(503).json({ message: 'Авторизация Supabase пока не настроена.' });
     return;
   }

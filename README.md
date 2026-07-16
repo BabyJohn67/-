@@ -41,15 +41,10 @@
    http://127.0.0.1:5173
    ```
 
-## PIN мастера
+## Вход персонала
 
-Временный PIN: `2580`.
-
-Для будущего изменения создайте файл `.env` рядом с `.env.example` и добавьте:
-
-```bash
-MASTER_PIN=ваш_новый_pin
-```
+Мастера и администраторы входят по своему email и паролю через Supabase. Роль сотрудника
+назначает администратор во вкладке `Сотрудники`.
 
 ## Google Таблица
 
@@ -173,7 +168,11 @@ https://hookah-menu.onrender.com/hookah/1 ... https://hookah-menu.onrender.com/h
 ```bash
 GOOGLE_SERVICE_ACCOUNT_EMAIL=ваш-service-account@project.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
-MASTER_PIN=2580
+VITE_SUPABASE_URL=адрес-проекта-Supabase
+VITE_SUPABASE_ANON_KEY=публичный-anon-key
+SUPABASE_URL=адрес-проекта-Supabase
+SUPABASE_ANON_KEY=публичный-anon-key
+SUPABASE_SERVICE_ROLE_KEY=секретный-service-role-key
 ```
 
 10. Откройте Google Таблицу и дайте service account доступ `Редактор`.
