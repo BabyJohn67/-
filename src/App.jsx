@@ -6,7 +6,6 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
-  Heart,
   Lock,
   LockOpen,
   LogOut,
@@ -29,6 +28,7 @@ import { GRAMS_PER_UNIT } from './config.js';
 import { fallbackTobaccos } from './data/fallbackTobaccos.js';
 import { hookahFormats } from './data/hookahFormats.js';
 import { hookahUnits } from './data/hookahUnits.js';
+import { STRENGTH_OPTIONS, TASTE_CATEGORIES } from './data/tastePreferences.js';
 import {
   addTobacco,
   clearActiveMix,
@@ -48,10 +48,20 @@ import {
   updateStaffProfile
 } from './services/api.js';
 import { distributeUnlockedMixPercentages } from './utils/mixPercentages.js';
+import {
+  getBrand,
+  getMasterStockStatus,
+  getTasteMatches,
+  matchesTobaccoSearch,
+  normalizeSearchValue,
+  scoreTobacco
+} from './utils/tobaccos.js';
 import AuthModal from './auth/AuthModal.jsx';
 import ProfileModal from './auth/ProfileModal.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import StaffPanel from './admin/StaffPanel.jsx';
+import MyOrdersSection from './components/MyOrdersSection.jsx';
+import TobaccoCard from './components/TobaccoCard.jsx';
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
 const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
@@ -67,101 +77,11 @@ const HISTORY_PERIODS = [
   { id: 'month', label: 'Месяц' },
   { id: 'all', label: 'Все время' }
 ];
-const GUEST_ORDER_STATUS_LABELS = {
-  new: 'Новый',
-  accepted: 'Принят',
-  preparing: 'Готовится',
-  ready: 'Готов',
-  completed: 'Завершён',
-  cancelled: 'Отменён'
-};
 const ACTIVE_GUEST_ORDER_STATUSES = ['new', 'accepted', 'preparing', 'ready'];
 const LEGACY_FORMAT_VARIANT_IDS = {
   'fruit-citrus': 'citrus-fruit',
   'fruit-premium': 'premium-fruit'
 };
-
-const TASTE_CATEGORIES = [
-  {
-    id: 'berry',
-    label: 'Ягодный',
-    hint: 'клубника, малина, смородина',
-    keywords: ['ягод', 'berry', 'strawberry', 'raspberry', 'blueberry', 'blackberry', 'currant', 'elderberry', 'gooseberry', 'клубник', 'малин', 'смород', 'черник', 'голубик', 'ежевик', 'бузин', 'крыжов', 'сорбет']
-  },
-  {
-    id: 'fruit',
-    label: 'Фруктовый',
-    hint: 'арбуз, манго, персик, дыня',
-    keywords: ['fruit', 'fruittella', 'арбуз', 'дын', 'манго', 'mango', 'peach', 'персик', 'banana', 'банан', 'apple', 'яблок', 'pear', 'груш', 'pineapple', 'ананас', 'melon', 'watermelon', 'papaya', 'папай', 'guava', 'гуава', 'feijoa', 'фейхоа', 'lychee', 'личи', 'apricot', 'абрикос', 'grape', 'виноград']
-  },
-  {
-    id: 'fresh',
-    label: 'Свежий',
-    hint: 'холодок, мята, огурец',
-    keywords: ['ice', 'arctic', 'fresh', 'mint', 'холод', 'мят', 'cucumber', 'огур', 'fizz', 'energy', 'энерг', 'supernova']
-  },
-  {
-    id: 'sweet',
-    label: 'Сладкий',
-    hint: 'конфеты, мармелад, мед',
-    keywords: ['sweet', 'candy', 'конфет', 'мармелад', 'skittles', 'chupa', 'honey', 'мед', 'barberry', 'барбарис', 'jelly', 'жвач', 'drops', 'сгущ', 'слад']
-  },
-  {
-    id: 'sour',
-    label: 'Кислый',
-    hint: 'цитрус, грейпфрут, кислые мармеладки',
-    keywords: ['sour', 'кисл', 'citrus', 'цитрус', 'lemon', 'лимон', 'lime', 'лайм', 'grapefruit', 'грейпфрут', 'orange', 'апельсин', 'mandarin', 'мандарин', 'cranberry', 'клюкв']
-  },
-  {
-    id: 'dessert',
-    label: 'Десертный',
-    hint: 'вафли, крем, печенье',
-    keywords: ['dessert', 'cream', 'крем', 'ice cream', 'морож', 'waffle', 'вафл', 'cookie', 'печен', 'cheesecake', 'чизкейк', 'choco', 'шоколад', 'cacao', 'какао', 'latte', 'pudding', 'пудинг', 'yogurt', 'йогурт', 'jam', 'джем', 'caramel', 'карамел', 'rafaello', 'рафаэл', 'muesli', 'мюсли', 'brownie', 'брауни']
-  },
-  {
-    id: 'tea',
-    label: 'Чайный',
-    hint: 'чай, бергамот, матча',
-    keywords: ['tea', 'чай', 'earl grey', 'бергамот', 'matcha', 'матча']
-  },
-  {
-    id: 'spicy',
-    label: 'Пряный',
-    hint: 'корица, специи, травы',
-    keywords: ['spice', 'спец', 'cinnamon', 'корица', 'adjika', 'аджик', 'ginger', 'имбир', 'трав', 'basil', 'базилик', 'sage', 'шалф', 'salvei', 'estragon', 'эстрагон']
-  },
-  {
-    id: 'nutty',
-    label: 'Ореховый',
-    hint: 'арахис, фисташка, орех',
-    keywords: ['nut', 'орех', 'peanut', 'арахис', 'pistachio', 'фисташ']
-  },
-  {
-    id: 'cocktail',
-    label: 'Коктейльный',
-    hint: 'мохито, кола, пина колада',
-    keywords: ['cocktail', 'коктейл', 'mojito', 'мохито', 'cola', 'кола', 'pina colada', 'пина колада', 'lemonade', 'melonade', 'prosecco', 'spritz', 'smoothie', 'смузи', 'juice', 'сок', 'напиток']
-  },
-  {
-    id: 'alcohol',
-    label: 'Алкогольный',
-    hint: 'ром, вино, виски',
-    keywords: ['rum', 'ром', 'wine', 'вино', 'mulled', 'глинтвейн', 'prosecco', 'whisky', 'виски', 'gin', 'джин', 'malibu', 'малибу', 'spritz', 'mead']
-  },
-  {
-    id: 'unusual',
-    label: 'Необычный',
-    hint: 'сыр, бекон, аджика, овощи',
-    keywords: ['bacon', 'бекон', 'cheese', 'сыр', 'cheddar', 'помидор', 'tomato', 'pomodoro', 'olive', 'олив', 'salami', 'салями', 'adjika', 'аджик', 'огур', 'cucumber', 'спец', 'torf', 'торф']
-  }
-];
-
-const STRENGTH_OPTIONS = [
-  { id: 'any', label: 'Не важно' },
-  { id: 'light', label: 'Легкий' },
-  { id: 'medium', label: 'Средний' },
-  { id: 'strong', label: 'Крепкий' }
-];
 
 function formatGrams(quantity) {
   return Math.round(quantity * GRAMS_PER_UNIT * 10) / 10;
@@ -185,76 +105,6 @@ function createInventoryRequestId() {
   return `order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function getBrand(item) {
-  return item.brand || item.name.trim().split(/\s+/)[0] || 'Другое';
-}
-
-function normalizeSearchValue(value) {
-  return String(value || '')
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function matchesTobaccoSearch(item, searchValue) {
-  const normalizedSearch = normalizeSearchValue(searchValue);
-  if (!normalizedSearch) return true;
-
-  const haystack = normalizeSearchValue(`${getBrand(item)} ${item.name} ${item.taste}`);
-  return normalizedSearch.split(' ').every((word) => haystack.includes(word));
-}
-
-function getStockStatus(item) {
-  if (item.quantity <= 0) return { label: 'Скоро появится', type: 'empty' };
-  return { label: 'В наличии', type: 'available' };
-}
-
-function getMasterStockStatus(item) {
-  if (item.quantity <= 0) return { label: 'Нет в наличии', type: 'empty' };
-  if (item.quantity <= 1) return { label: 'Заканчивается', type: 'low' };
-  return { label: 'В наличии', type: 'available' };
-}
-
-function getTasteMatches(item) {
-  const text = `${item.name} ${item.taste}`.toLowerCase();
-  return TASTE_CATEGORIES.filter((category) =>
-    category.keywords.some((keyword) => text.includes(keyword))
-  );
-}
-
-function estimateStrength(item) {
-  const text = `${item.name} ${item.taste}`.toLowerCase();
-
-  // Позже сюда лучше подключить настоящую крепость из Google Таблицы,
-  // если появится отдельная колонка "Крепость". Сейчас это мягкая подсказка,
-  // а не точное обещание гостю.
-  if (['deus', 'bonche', 'satyr', 'tr125', 'terror', 'kraken', 'black afgano'].some((word) => text.includes(word))) {
-    return 'strong';
-  }
-
-  if (['darkside', 'ds ', 'musthave', 'mh ', 'blackburn', 'bb ', 'overdose', 'od '].some((word) => text.includes(word))) {
-    return 'medium';
-  }
-
-  if (['fresh', 'ice', 'холод', 'ягод', 'клубник', 'малин', 'арбуз', 'дын', 'чай', 'tea', 'sebero', 'sl ', 'adalya'].some((word) => text.includes(word))) {
-    return 'light';
-  }
-
-  return 'medium';
-}
-
-function scoreTobacco(item, selectedCategoryIds, selectedStrength) {
-  const categoryIds = getTasteMatches(item).map((category) => category.id);
-  let score = item.inStock ? 40 : 0;
-  const categoryMatches = selectedCategoryIds.filter((id) => categoryIds.includes(id)).length;
-  score += categoryMatches * 22;
-  if (selectedCategoryIds.length > 0 && categoryMatches === 0) score -= 15;
-  if (selectedStrength !== 'any' && estimateStrength(item) === selectedStrength) score += 12;
-  if (item.quantity > 1) score += Math.min(item.quantity, 6);
-  return score;
-}
 
 function loadStoredChoice() {
   try {
@@ -377,91 +227,6 @@ function formatMixDate(value) {
   }
 }
 
-function TobaccoCard({
-  item,
-  isMaster,
-  onChange,
-  onSave,
-  onAddChoice,
-  isChosen,
-  isSaving,
-  selectedCategoryIds = []
-}) {
-  const stock = isMaster ? getMasterStockStatus(item) : getStockStatus(item);
-  const matchedCategories = getTasteMatches(item).filter((category) =>
-    selectedCategoryIds.includes(category.id)
-  );
-
-  return (
-    <article className={`tobacco-card stock-${stock.type}`}>
-      <div className="card-topline">
-        <span className="stock-dot" aria-hidden="true" />
-        <span>{stock.label}</span>
-        <span className="brand-pill">{getBrand(item)}</span>
-      </div>
-
-      <h3>{item.name}</h3>
-      <p>{item.taste}</p>
-
-      {matchedCategories.length > 0 && (
-        <div className="taste-match-list">
-          {matchedCategories.map((category) => (
-            <span key={category.id}>{category.label}</span>
-          ))}
-        </div>
-      )}
-
-      {isMaster && (
-        <div className="quantity-row">
-          <strong>{item.quantity} шт</strong>
-          <span>примерно {formatGrams(item.quantity)} г</span>
-        </div>
-      )}
-
-      <button
-        className="want-button"
-        disabled={item.quantity <= 0}
-        type="button"
-        onClick={() => onAddChoice(item)}
-      >
-        <Heart size={18} />
-        {isChosen ? 'В моем выборе' : 'Хочу это'}
-      </button>
-
-      {isMaster && (
-        <div className="master-controls">
-          <label>
-            Количество
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={item.quantity}
-              onChange={(event) => onChange(item.id, Number(event.target.value || 0))}
-            />
-          </label>
-          <label className="switch-line">
-            <input
-              type="checkbox"
-              checked={item.inStock}
-              onChange={(event) => onChange(item.id, event.target.checked ? Math.max(1, item.quantity) : 0)}
-            />
-            Есть в наличии
-          </label>
-          <button
-            className="ghost-button"
-            disabled={isSaving}
-            type="button"
-            onClick={() => onSave(item)}
-          >
-            {isSaving ? 'Сохраняю' : 'Сохранить в таблицу'}
-          </button>
-        </div>
-      )}
-    </article>
-  );
-}
-
 export default function App() {
   const auth = useAuth();
   const [tobaccos, setTobaccos] = useState(fallbackTobaccos);
@@ -480,6 +245,7 @@ export default function App() {
   const [isGuestOrderSubmitting, setIsGuestOrderSubmitting] = useState(false);
   const [myGuestOrders, setMyGuestOrders] = useState([]);
   const [isMyOrdersLoading, setIsMyOrdersLoading] = useState(false);
+  const [myOrdersView, setMyOrdersView] = useState('active');
   const [tableNumber, setTableNumber] = useState(() => loadStoredTableNumber());
   const [guestId] = useState(() => loadOrCreateGuestId());
   const [callMasterNotice, setCallMasterNotice] = useState('');
@@ -828,6 +594,8 @@ export default function App() {
 
   const availableCount = tobaccos.filter((item) => item.quantity > 0).length;
   const selectedStrengthLabel = STRENGTH_OPTIONS.find((option) => option.id === selectedStrength)?.label || 'Не важно';
+  const activeMyGuestOrders = myGuestOrders.filter((order) => ACTIVE_GUEST_ORDER_STATUSES.includes(order.status));
+  const completedMyGuestOrders = myGuestOrders.filter((order) => !ACTIVE_GUEST_ORDER_STATUSES.includes(order.status));
   const masterStats = useMemo(() => {
     const totalGrams = tobaccos.reduce((sum, item) => sum + getInventoryGrams(item), 0);
 
@@ -1092,21 +860,6 @@ export default function App() {
       setMasterSaveMessage('Не удалось выйти из аккаунта. Повторите ещё раз.');
       return;
     }
-  }
-
-  function updateDraftQuantity(id, quantity) {
-    setTobaccos((current) =>
-      current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              quantity,
-              grams: formatGrams(quantity),
-              inStock: quantity > 0
-            }
-          : item
-      )
-    );
   }
 
   function updateDraftGrams(id, grams) {
@@ -1605,12 +1358,8 @@ export default function App() {
           <TobaccoCard
             key={item.id}
             item={item}
-            isMaster={isMaster}
-            onChange={updateDraftQuantity}
-            onSave={saveQuantityToSheet}
             onAddChoice={addChoice}
             isChosen={choiceIds.has(item.id)}
-            isSaving={savingIds.includes(item.id)}
             selectedCategoryIds={selectedCategoryIds}
           />
         ))}
@@ -1752,7 +1501,6 @@ export default function App() {
         {!isMaster && (
           <section className="hero">
             <div>
-              <span className="eyebrow">QR-меню для гостей</span>
               <h1>Hookah Menu</h1>
               <p>Выберите вкус для кальяна за пару нажатий.</p>
               <div className="hero-actions">
@@ -2171,10 +1919,12 @@ export default function App() {
           <label className="guest-comment-field">
             Комментарий
             <textarea
+              maxLength={1000}
               placeholder="Например: с холодком, без холодка, побольше ягод, поменьше сладости, хочу что-то необычное"
               value={guestComment}
-              onChange={(event) => setGuestComment(event.target.value)}
+              onChange={(event) => setGuestComment(event.target.value.slice(0, 1000))}
             />
+            <small className="guest-comment-counter">{guestComment.length} / 1000</small>
           </label>
 
           <div className="send-options">
@@ -2329,30 +2079,15 @@ export default function App() {
         </section>
 
         {auth.user && !auth.isStaff && (
-          <section className="my-orders-section" aria-label="Мои заказы">
-            <div className="choice-heading">
-              <div><span className="eyebrow">Статус</span><h3>Мои заказы</h3></div>
-              <button className="ghost-button" disabled={isMyOrdersLoading} type="button" onClick={refreshMyGuestOrders}>
-                <RefreshCcw size={17} />
-                Обновить
-              </button>
-            </div>
-            {isMyOrdersLoading ? (
-              <div className="soft-hint">Загружаем ваши заказы…</div>
-            ) : myGuestOrders.length === 0 ? (
-              <div className="soft-hint">Вы ещё не отправляли заказов.</div>
-            ) : (
-              <div className="my-orders-list">
-                {myGuestOrders.map((order) => (
-                  <article className={`my-order-card status-${order.status}`} key={order.id}>
-                    <div><span>Заказ №{order.order_number}</span><strong>{GUEST_ORDER_STATUS_LABELS[order.status] || order.status}</strong></div>
-                    <p>Стол №{order.table_number} · {order.variant_name}</p>
-                    <small>{formatMixDate(order.created_at)}</small>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
+          <MyOrdersSection
+            activeOrders={activeMyGuestOrders}
+            completedOrders={completedMyGuestOrders}
+            formatDate={formatMixDate}
+            isLoading={isMyOrdersLoading}
+            onRefresh={refreshMyGuestOrders}
+            onViewChange={setMyOrdersView}
+            view={myOrdersView}
+          />
         )}
 
         {!isMaster && (

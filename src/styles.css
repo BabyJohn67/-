@@ -291,12 +291,6 @@ h1 {
   border: 1px solid var(--line);
 }
 
-.danger-button {
-  color: var(--danger);
-  border-color: rgba(255, 179, 167, 0.3);
-  background: rgba(255, 179, 167, 0.08);
-}
-
 .danger-confirm-button {
   gap: 8px;
   color: #21110d;
@@ -317,6 +311,8 @@ h1 {
 
 .auth-modal {
   width: min(460px, 100%);
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
   border: 1px solid rgba(242, 207, 131, 0.24);
   border-radius: 8px;
   padding: 18px;
@@ -523,8 +519,7 @@ h2 {
   user-select: none;
 }
 
-.filter-toggle input,
-.switch-line input {
+.filter-toggle input {
   accent-color: var(--gold);
 }
 
@@ -1105,6 +1100,12 @@ h2 {
   box-shadow: 0 0 0 3px rgba(217, 170, 69, 0.12);
 }
 
+.guest-comment-counter {
+  justify-self: end;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .guest-details-section {
   display: grid;
   gap: 14px;
@@ -1196,42 +1197,6 @@ h2 {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
   overflow: hidden;
-}
-
-.prepared-request-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(242, 207, 131, 0.14);
-}
-
-.prepared-request-heading strong {
-  color: var(--gold-soft);
-}
-
-.prepared-request-heading button {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: #f7ebd1;
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-}
-
-.prepared-request pre {
-  margin: 0;
-  padding: 14px;
-  color: #fff6e4;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.55;
-  font-family: inherit;
 }
 
 .recommendation-grid {
@@ -1507,24 +1472,6 @@ h2 {
   font-weight: 900;
 }
 
-.quantity-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(242, 207, 131, 0.14);
-}
-
-.quantity-row strong {
-  color: var(--gold-soft);
-  font-size: 14px;
-}
-
-.quantity-row span {
-  color: var(--muted);
-  font-size: 14px;
-}
-
 .want-button {
   min-height: 46px;
   display: inline-flex;
@@ -1543,47 +1490,6 @@ h2 {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.08);
   cursor: not-allowed;
-}
-
-.master-controls {
-  display: grid;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(242, 207, 131, 0.14);
-}
-
-.master-controls label {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.master-controls input[type="number"] {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0 12px;
-  color: #fff6e4;
-  background: rgba(255, 255, 255, 0.06);
-  outline: 0;
-}
-
-.switch-line {
-  display: flex !important;
-  grid-template-columns: none;
-  align-items: center;
-  gap: 8px !important;
-}
-
-.master-controls button {
-  width: 100%;
-}
-
-.master-controls button:disabled {
-  opacity: 0.62;
-  cursor: wait;
 }
 
 .empty-state,
@@ -1786,8 +1692,6 @@ h2 {
   font-weight: 900;
 }
 
-.master-mix-hookah-field,
-.master-mix-row label,
 .master-mix-comment {
   display: grid;
   gap: 6px;
@@ -1796,9 +1700,6 @@ h2 {
   font-weight: 800;
 }
 
-.master-mix-hookah-field input,
-.master-mix-row input,
-.master-mix-row select,
 .master-mix-comment textarea {
   width: 100%;
   min-height: 44px;
@@ -1810,37 +1711,11 @@ h2 {
   outline: 0;
 }
 
-.master-mix-row select {
-  appearance: none;
-}
-
 .master-mix-comment textarea {
   min-height: 86px;
   resize: vertical;
   padding: 12px;
   line-height: 1.45;
-}
-
-.master-mix-items {
-  display: grid;
-  gap: 10px;
-}
-
-.master-mix-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px 48px;
-  gap: 10px;
-  align-items: end;
-}
-
-.master-mix-row button {
-  min-height: 44px;
-  padding: 0;
-}
-
-.master-mix-row button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .master-mix-actions {
@@ -2198,10 +2073,6 @@ h2 {
   border-color: rgba(156, 229, 189, 0.24);
 }
 
-.active-hookah-card.is-empty {
-  border-color: rgba(255, 179, 167, 0.2);
-}
-
 .active-hookah-card-header {
   display: flex;
   align-items: flex-start;
@@ -2243,11 +2114,6 @@ h2 {
 .active-hookah-card.has-mix .active-hookah-status {
   color: #07140d;
   background: var(--success);
-}
-
-.active-hookah-card.is-empty .active-hookah-status {
-  color: #2a100c;
-  background: var(--danger);
 }
 
 .active-hookah-date {
@@ -2976,6 +2842,34 @@ h2 {
   margin-top: 18px;
 }
 
+.my-orders-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.my-orders-tabs button {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.my-orders-tabs button.is-active {
+  border-color: rgba(242, 207, 131, 0.6);
+  color: #171007;
+  background: var(--gold-soft);
+}
+
+.my-orders-tabs span {
+  margin-left: 5px;
+  opacity: 0.72;
+}
+
 .my-orders-list,
 .guest-order-grid {
   display: grid;
@@ -3011,6 +2905,35 @@ h2 {
 
 .my-order-card p {
   margin: 10px 0 6px;
+}
+
+.my-order-items {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(210, 169, 75, 0.18);
+}
+
+.my-order-items span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.my-order-items strong {
+  flex: 0 0 auto;
+  color: var(--gold-soft);
+}
+
+.my-order-comment {
+  padding-left: 10px;
+  border-left: 2px solid var(--gold);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
 }
 
 .my-order-card small {
@@ -3111,10 +3034,6 @@ h2 {
   .master-add-form label:last-of-type,
   .master-add-form button {
     grid-column: 1 / -1;
-  }
-
-  .master-mix-row {
-    grid-template-columns: minmax(0, 1fr) 92px 48px;
   }
 
   .mix-builder-grid {
@@ -3254,6 +3173,11 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .my-orders-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
   .auth-modal-actions,
   .guest-order-actions,
   .source-guest-order,
@@ -3358,14 +3282,6 @@ h2 {
 
   .master-mix-heading > span {
     width: fit-content;
-  }
-
-  .master-mix-row {
-    grid-template-columns: 1fr;
-  }
-
-  .master-mix-row button {
-    width: 100%;
   }
 
   .selected-mix-heading,

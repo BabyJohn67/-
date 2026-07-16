@@ -48,6 +48,12 @@ test('guest order requires exactly 100 percent', () => {
   assert.equal(validateGuestOrder(order), 'Сумма процентов должна быть ровно 100%.');
 });
 
+test('guest order safely limits an oversized comment', () => {
+  const order = normalizeGuestOrderInput({ comment: `  ${'я'.repeat(1200)}  ` });
+  assert.equal(order.comment.length, 1000);
+  assert.equal(order.comment, 'я'.repeat(1000));
+});
+
 test('guest order statuses follow the working flow', () => {
   assert.equal(canTransitionGuestOrder('new', 'accepted'), true);
   assert.equal(canTransitionGuestOrder('accepted', 'preparing'), true);
