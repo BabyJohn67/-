@@ -15,12 +15,20 @@ function readLegacyJwtRole(key) {
   }
 }
 
+function isSafeApiKeyValue(key) {
+  return /^[\x21-\x7E]+$/.test(String(key || ''));
+}
+
 function isPublicSupabaseKey(key) {
-  return String(key || '').startsWith('sb_publishable_') || readLegacyJwtRole(key) === 'anon';
+  return isSafeApiKeyValue(key) && (
+    String(key || '').startsWith('sb_publishable_') || readLegacyJwtRole(key) === 'anon'
+  );
 }
 
 function isServiceSupabaseKey(key) {
-  return String(key || '').startsWith('sb_secret_') || readLegacyJwtRole(key) === 'service_role';
+  return isSafeApiKeyValue(key) && (
+    String(key || '').startsWith('sb_secret_') || readLegacyJwtRole(key) === 'service_role'
+  );
 }
 
 export function getSupabaseAuthConfigurationError(environment = process.env) {
