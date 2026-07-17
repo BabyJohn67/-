@@ -1,6 +1,6 @@
 import { RefreshCcw } from 'lucide-react';
 
-const STATUS_LABELS = {
+export const GUEST_ORDER_STATUS_LABELS = {
   new: 'Новый',
   accepted: 'Принят',
   preparing: 'Готовится',
@@ -64,7 +64,7 @@ export default function MyOrdersSection({
         <div className="my-orders-list">
           {orders.map((order) => (
             <article className={`my-order-card status-${order.status}`} key={order.id}>
-              <div><span>Заказ №{order.order_number}</span><strong>{STATUS_LABELS[order.status] || order.status}</strong></div>
+              <div><span>Заказ №{order.order_number}</span><strong>{GUEST_ORDER_STATUS_LABELS[order.status] || order.status}</strong></div>
               <p>Стол №{order.table_number} · {order.variant_name}</p>
               {Array.isArray(order.items) && order.items.length > 0 ? (
                 <div className="my-order-items">

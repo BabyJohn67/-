@@ -60,7 +60,7 @@ import AuthModal from './auth/AuthModal.jsx';
 import ProfileModal from './auth/ProfileModal.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import StaffPanel from './admin/StaffPanel.jsx';
-import MyOrdersSection from './components/MyOrdersSection.jsx';
+import MyOrdersSection, { GUEST_ORDER_STATUS_LABELS } from './components/MyOrdersSection.jsx';
 import TobaccoCard from './components/TobaccoCard.jsx';
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
