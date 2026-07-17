@@ -35,6 +35,7 @@ import {
   updateGuestOrderStatus
 } from './guestOrdersService.js';
 import { sendTelegramNotification } from './services/telegramService.js';
+import { isKnownHookahId } from '../src/data/hookahUnits.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -442,6 +443,11 @@ app.get('/api/hookahs/history', ...requireMaster, (request, response) => {
 app.get('/api/hookahs/:hookahId/mix', (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
 
+  if (!isKnownHookahId(hookahId)) {
+    response.status(404).json({ message: 'Такой кальян не найден.' });
+    return;
+  }
+
   if (hasGoogleCredentials()) {
     readActiveMixFromGoogleApi(hookahId)
       .then((mix) => {
@@ -470,12 +476,7 @@ app.put('/api/hookahs/:hookahId/mix', ...requireMaster, async (request, response
   const expectedActiveMixId = String(request.body.expectedActiveMixId || '').trim();
   const guestOrderId = String(request.body.guestOrderId || '').trim();
 
-  if (!/^\d+$/.test(hookahId)) {
-    response.status(400).json({ message: 'Укажите номер кальяна.' });
-    return;
-  }
-
-  if (Number(hookahId) < 1 || Number(hookahId) > 10) {
+  if (!isKnownHookahId(hookahId)) {
     response.status(404).json({ message: 'Такой кальян не найден.' });
     return;
   }
@@ -577,8 +578,8 @@ app.put('/api/hookahs/:hookahId/mix', ...requireMaster, async (request, response
 app.delete('/api/hookahs/:hookahId/mix', ...requireMaster, (request, response) => {
   const hookahId = String(request.params.hookahId || '').trim();
 
-  if (!hookahId) {
-    response.status(400).json({ message: 'Укажите номер кальяна.' });
+  if (!isKnownHookahId(hookahId)) {
+    response.status(404).json({ message: 'Такой кальян не найден.' });
     return;
   }
 

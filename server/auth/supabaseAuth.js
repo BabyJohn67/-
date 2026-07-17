@@ -5,18 +5,47 @@ const ALLOWED_ROLES = new Set(['guest', 'master', 'admin']);
 let publicClient;
 let adminClient;
 
-export function isSupabaseAuthConfigured() {
-  return Boolean(
-    process.env.SUPABASE_URL &&
-    process.env.SUPABASE_ANON_KEY &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+function readLegacyJwtRole(key) {
+  if (!String(key || '').startsWith('eyJ')) return '';
+
+  try {
+    return JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString()).role || '';
+  } catch {
+    return '';
+  }
+}
+
+function isPublicSupabaseKey(key) {
+  return String(key || '').startsWith('sb_publishable_') || readLegacyJwtRole(key) === 'anon';
+}
+
+function isServiceSupabaseKey(key) {
+  return String(key || '').startsWith('sb_secret_') || readLegacyJwtRole(key) === 'service_role';
+}
+
+export function getSupabaseAuthConfigurationError(environment = process.env) {
+  const url = String(environment.SUPABASE_URL || '').trim();
+  const anonKey = String(environment.SUPABASE_ANON_KEY || '').trim();
+  const serviceKey = String(environment.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+
+  if (!url || !anonKey || !serviceKey) return 'Не заполнены серверные переменные Supabase.';
+  if (!isPublicSupabaseKey(anonKey)) return 'SUPABASE_ANON_KEY должен содержать публичный ключ.';
+  if (!isServiceSupabaseKey(serviceKey)) return 'SUPABASE_SERVICE_ROLE_KEY должен содержать секретный серверный ключ.';
+  if (anonKey === serviceKey) return 'Публичный и серверный ключи Supabase не должны совпадать.';
+  return '';
+}
+
+export function isSupabaseAuthConfigured(environment = process.env) {
+  return !getSupabaseAuthConfigurationError(environment);
+}
+
+function assertSupabaseAuthConfigured() {
+  const configurationError = getSupabaseAuthConfigurationError();
+  if (configurationError) throw new Error(`Supabase Auth не настроен: ${configurationError}`);
 }
 
 function getPublicClient() {
-  if (!isSupabaseAuthConfigured()) {
-    throw new Error('Supabase Auth не настроен на сервере.');
-  }
+  assertSupabaseAuthConfigured();
 
   if (!publicClient) {
     publicClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
@@ -28,9 +57,7 @@ function getPublicClient() {
 }
 
 export function getSupabaseAdminClient() {
-  if (!isSupabaseAuthConfigured()) {
-    throw new Error('Supabase Auth не настроен на сервере.');
-  }
+  assertSupabaseAuthConfigured();
 
   if (!adminClient) {
     adminClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -42,9 +69,7 @@ export function getSupabaseAdminClient() {
 }
 
 export function getSupabaseUserClient(token) {
-  if (!isSupabaseAuthConfigured()) {
-    throw new Error('Supabase Auth не настроен на сервере.');
-  }
+  assertSupabaseAuthConfigured();
 
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },

@@ -70,3 +70,7 @@ export const hookahUnits = [
     lockedFormatId: 'signature'
   }
 ];
+
+export function isKnownHookahId(hookahId) {
+  return hookahUnits.some((unit) => unit.id === String(hookahId));
+}

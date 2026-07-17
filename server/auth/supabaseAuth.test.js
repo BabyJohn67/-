@@ -2,10 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDefaultProfile,
+  getSupabaseAuthConfigurationError,
   hasRequiredRole,
+  isSupabaseAuthConfigured,
   parseBearerToken,
   validateAdminProfileChange
 } from './supabaseAuth.js';
+
+const validEnvironment = {
+  SUPABASE_URL: 'https://example.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_test',
+  SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_test'
+};
+
+test('Supabase настроен только с публичным и серверным ключами своих типов', () => {
+  assert.equal(isSupabaseAuthConfigured(validEnvironment), true);
+  assert.equal(getSupabaseAuthConfigurationError(validEnvironment), '');
+});
+
+test('публичный ключ не принимается вместо серверного', () => {
+  const environment = {
+    ...validEnvironment,
+    SUPABASE_SERVICE_ROLE_KEY: validEnvironment.SUPABASE_ANON_KEY
+  };
+
+  assert.equal(isSupabaseAuthConfigured(environment), false);
+  assert.equal(
+    getSupabaseAuthConfigurationError(environment),
+    'SUPABASE_SERVICE_ROLE_KEY должен содержать секретный серверный ключ.'
+  );
+});
 
 test('Bearer token извлекается без учёта регистра схемы', () => {
   assert.equal(parseBearerToken('bearer test-token'), 'test-token');
