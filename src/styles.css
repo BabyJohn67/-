@@ -2819,13 +2819,25 @@ h2 {
   color: var(--muted);
 }
 
-.guest-order-preview-comment,
+.guest-order-preview-comment {
+  min-width: 0;
+  border: 1px solid rgba(210, 169, 75, 0.28);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
 .guest-order-comment {
   border-left: 2px solid var(--gold);
   padding-left: 12px;
 }
 
-.guest-order-preview-comment p,
+.guest-order-preview-comment p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .guest-order-comment p {
   margin: 6px 0 0;
   white-space: pre-wrap;

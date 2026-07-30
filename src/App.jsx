@@ -1826,9 +1826,10 @@ export default function App() {
                           <button
                             className="hookah-format-action"
                             type="button"
-                            onClick={() => setSelectedFormatId(variant.id)}
+                            aria-pressed={isSelected}
+                            onClick={() => setSelectedFormatId((current) => current === variant.id ? '' : variant.id)}
                           >
-                            {isSelected ? 'Выбрано' : 'Выбрать'}
+                            {isSelected ? 'Снять выбор' : 'Выбрать'}
                           </button>
                         </article>
                       );
