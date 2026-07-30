@@ -65,7 +65,6 @@ import TobaccoCard from './components/TobaccoCard.jsx';
 
 const CHOICE_STORAGE_KEY = 'hookah-menu-choice-v1';
 const FORMAT_STORAGE_KEY = 'hookahSelectedFormat';
-const CONTACT_STORAGE_KEY = 'hookah-menu-contact-data-v1';
 const TABLE_STORAGE_KEY = 'hookah-menu-table-number-v1';
 const GUEST_ID_STORAGE_KEY = 'hookah-menu-guest-id-v1';
 const LAST_CALL_STORAGE_KEY = 'hookah-menu-last-call-master-v1';
@@ -159,23 +158,6 @@ function loadStoredTableNumber() {
   }
 }
 
-function loadStoredContactData() {
-  try {
-    const raw = localStorage.getItem(CONTACT_STORAGE_KEY);
-    if (!raw) return { name: '', phone: '', email: '', social: '' };
-
-    const parsed = JSON.parse(raw);
-    return {
-      name: parsed.name || '',
-      phone: parsed.phone || '',
-      email: parsed.email || '',
-      social: parsed.social || ''
-    };
-  } catch {
-    return { name: '', phone: '', email: '', social: '' };
-  }
-}
-
 function formatOrderPrice(value) {
   return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0))} ₽`;
 }
@@ -239,7 +221,6 @@ export default function App() {
   const [failedFormatImages, setFailedFormatImages] = useState({});
   const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
   const [guestComment, setGuestComment] = useState('');
-  const [contactData, setContactData] = useState(() => loadStoredContactData());
   const [preparedRequest, setPreparedRequest] = useState(null);
   const [guestOrderMessage, setGuestOrderMessage] = useState('');
   const [isGuestOrderSubmitting, setIsGuestOrderSubmitting] = useState(false);
@@ -447,15 +428,9 @@ export default function App() {
   }, [auth.passwordRecovery]);
 
   useEffect(() => {
-    if (!auth.user) return;
-    setContactData((current) => ({
-      ...current,
-      name: current.name || auth.profile?.name || '',
-      phone: current.phone || auth.profile?.phone || '',
-      email: current.email || auth.user.email || ''
-    }));
-    if (!auth.isStaff) refreshMyGuestOrders();
-  }, [auth.user, auth.profile?.name, auth.profile?.phone, auth.isStaff]);
+    if (!auth.user || auth.isStaff) return;
+    refreshMyGuestOrders();
+  }, [auth.user, auth.isStaff]);
 
   useEffect(() => {
     if (!hookahPageId) return;
@@ -496,12 +471,6 @@ export default function App() {
   }, [tableNumber]);
 
   useEffect(() => {
-    // Пока контактные данные сохраняются только локально.
-    // Позже здесь можно подключить отправку в Telegram, Google Sheets или заказ.
-    localStorage.setItem(CONTACT_STORAGE_KEY, JSON.stringify(contactData));
-  }, [contactData]);
-
-  useEffect(() => {
     if (!isMaster) return;
     refreshActiveHookahs();
   }, [isMaster]);
@@ -520,13 +489,6 @@ export default function App() {
     if (!isMaster || !auth.isAdmin || masterTab !== 'staff') return;
     refreshStaffProfiles();
   }, [auth.isAdmin, isMaster, masterTab]);
-
-  function updateContactData(field, value) {
-    setContactData((current) => ({
-      ...current,
-      [field]: value
-    }));
-  }
 
   const choiceIds = useMemo(() => new Set(choiceItems.map((item) => item.id)), [choiceItems]);
   const selectedFormat = findFormatSelection(selectedFormatId);
@@ -748,21 +710,15 @@ export default function App() {
       setGuestOrderMessage('Укажите номер стола.');
       return;
     }
-    if (contactData.name.trim().length < 2) {
-      setGuestOrderMessage('Укажите ваше имя.');
-      return;
-    }
-    if (!/^\S+@\S+\.\S+$/.test(contactData.email.trim())) {
-      setGuestOrderMessage('Укажите корректный email.');
-      return;
-    }
+    const guestEmail = auth.user?.email?.trim() || '';
+    const guestName = auth.profile?.name?.trim() || guestEmail.split('@')[0] || 'Гость';
 
     setPreparedRequest({
       requestId: createInventoryRequestId(),
       tableNumber: tableNumber.trim(),
-      guestName: contactData.name.trim(),
-      guestPhone: contactData.phone.trim(),
-      guestEmail: contactData.email.trim(),
+      guestName,
+      guestPhone: auth.profile?.phone?.trim() || '',
+      guestEmail,
       formatId: selectedFormat.format.id,
       formatName: selectedFormat.format.title,
       variantId: selectedFormat.variant.id,
@@ -784,7 +740,14 @@ export default function App() {
     setIsGuestOrderSubmitting(true);
     setGuestOrderMessage('');
     try {
-      const result = await createGuestOrder(preparedRequest);
+      const guestEmail = auth.user.email?.trim() || '';
+      const guestName = auth.profile?.name?.trim() || guestEmail.split('@')[0] || 'Гость';
+      const result = await createGuestOrder({
+        ...preparedRequest,
+        guestName,
+        guestPhone: auth.profile?.phone?.trim() || '',
+        guestEmail
+      });
       setPreparedRequest(null);
       setGuestOrderMessage(`Заказ №${result.order.order_number} отправлен мастеру.`);
       await refreshMyGuestOrders();
@@ -1934,58 +1897,6 @@ export default function App() {
             />
             <small className="guest-comment-counter">{guestComment.length} / 1000</small>
           </label>
-
-          <section className="guest-details-section" aria-label="Контактные данные">
-            <div className="guest-details-heading">
-              <span className="eyebrow">Для связи</span>
-              <h3>Контактные данные</h3>
-            </div>
-            <div className="guest-details-fields">
-              <label className="guest-details-field">
-                <span>Имя</span>
-                <input
-                  type="text"
-                  value={contactData.name}
-                  onChange={(event) => updateContactData('name', event.target.value)}
-                  placeholder="Ваше имя"
-                  autoComplete="name"
-                />
-              </label>
-              <label className="guest-details-field">
-                <span>Телефон</span>
-                <input
-                  type="tel"
-                  value={contactData.phone}
-                  onChange={(event) => updateContactData('phone', event.target.value)}
-                  placeholder="Номер телефона"
-                  autoComplete="tel"
-                />
-              </label>
-              <label className="guest-details-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={contactData.email}
-                  onChange={(event) => updateContactData('email', event.target.value)}
-                  placeholder="name@example.com"
-                  autoComplete="email"
-                />
-              </label>
-              <label className="guest-details-field">
-                <span>Соцсеть</span>
-                <input
-                  type="text"
-                  value={contactData.social}
-                  onChange={(event) => updateContactData('social', event.target.value)}
-                  placeholder="Telegram или Instagram"
-                  autoComplete="off"
-                />
-              </label>
-            </div>
-            <p className="guest-details-note">
-              Данные сохраняются на этом телефоне и используются только для вашего заказа.
-            </p>
-          </section>
 
           <div className="send-options">
             <button className="primary-button" type="button" onClick={prepareChoiceRequest}>
