@@ -886,7 +886,6 @@ h2 {
 
 .recommendation-section,
 .guest-request-section,
-.choice-section,
 .call-master-section {
   margin: 22px 0;
   padding: 18px;
@@ -895,15 +894,17 @@ h2 {
   background: rgba(21, 18, 13, 0.72);
 }
 
-.guest-table-field {
+.taste-table-picker {
   display: grid;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(242, 207, 131, 0.14);
   color: var(--gold-soft);
   font-weight: 900;
 }
 
-.guest-table-field input {
+.taste-table-picker input {
   width: 100%;
   min-height: 52px;
   border: 1px solid rgba(242, 207, 131, 0.34);
@@ -915,20 +916,13 @@ h2 {
   font-size: 18px;
 }
 
-.guest-table-field input:focus {
+.taste-table-picker input:focus {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(217, 170, 69, 0.12);
 }
 
-.choice-list-title {
-  display: block;
-  margin: 14px 0 10px;
-  color: var(--gold-soft);
-}
-
 .recommendation-heading,
 .guest-request-heading,
-.choice-heading,
 .call-master-heading {
   display: flex;
   align-items: flex-start;
@@ -939,7 +933,6 @@ h2 {
 
 .recommendation-heading h3,
 .guest-request-heading h3,
-.choice-heading h3,
 .call-master-heading h3 {
   margin-top: 5px;
   color: #fff6e4;
@@ -1201,8 +1194,7 @@ h2 {
   line-height: 1.5;
 }
 
-.send-options,
-.choice-send-row {
+.send-options {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -1210,8 +1202,7 @@ h2 {
 }
 
 .send-options .primary-button,
-.send-options .ghost-button,
-.choice-send-row .ghost-button {
+.send-options .ghost-button {
   gap: 8px;
   padding: 0 16px;
 }
@@ -1236,89 +1227,12 @@ h2 {
   gap: 14px;
 }
 
-.soft-hint,
-.choice-empty {
+.soft-hint {
   padding: 16px;
   border: 1px solid rgba(242, 207, 131, 0.14);
   border-radius: 8px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);
-}
-
-.choice-list {
-  display: grid;
-  gap: 10px;
-}
-
-.choice-format-summary {
-  display: grid;
-  gap: 5px;
-  margin-bottom: 12px;
-  padding: 14px;
-  border: 1px solid rgba(242, 207, 131, 0.18);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.choice-format-summary span {
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.choice-format-summary strong {
-  color: #fff6e4;
-  font-size: 18px;
-}
-
-.choice-format-summary small {
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.choice-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid rgba(242, 207, 131, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.choice-item div {
-  display: grid;
-  gap: 4px;
-}
-
-.choice-item span {
-  color: var(--gold-soft);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.choice-item strong {
-  color: #fff6e4;
-}
-
-.choice-item small {
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.choice-item button {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: #f7ebd1;
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
 }
 
 .brand-filter {
@@ -3181,7 +3095,6 @@ h2 {
   .taste-builder-heading,
   .recommendation-heading,
   .guest-request-heading,
-  .choice-heading,
   .call-master-heading,
   .master-panel-header {
     flex-direction: column;
@@ -3238,7 +3151,6 @@ h2 {
 
   .send-options .primary-button,
   .send-options .ghost-button,
-  .choice-send-row .ghost-button,
   .call-master-controls .primary-button,
   .auth-actions .primary-button,
   .auth-actions .ghost-button {

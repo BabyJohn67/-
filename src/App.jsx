@@ -737,10 +737,6 @@ export default function App() {
     });
   }
 
-  function removeChoice(id) {
-    setChoiceItems((current) => current.filter((item) => item.id !== id));
-  }
-
   function prepareChoiceRequest() {
     setGuestOrderMessage('');
     if (!selectedFormat) {
@@ -1907,6 +1903,17 @@ export default function App() {
               ? 'Выберите один или несколько вкусов, и мы подберем варианты.'
               : `Выбрано: ${selectedCategories.map((category) => category.label).join(' + ') || 'любой вкус'}, крепость: ${selectedStrengthLabel}.`}
           </div>
+
+          <label className="taste-table-picker">
+            <span>Укажите стол</span>
+            <input
+              inputMode="numeric"
+              type="text"
+              value={tableNumber}
+              onChange={(event) => setTableNumber(event.target.value)}
+              placeholder="Например: 5"
+            />
+          </label>
         </section>
 
         <section className="guest-request-section" aria-label="Комментарий для мастера">
@@ -1927,88 +1934,6 @@ export default function App() {
             />
             <small className="guest-comment-counter">{guestComment.length} / 1000</small>
           </label>
-
-        </section>
-
-        <section className="recommendation-section" aria-label="Мы рекомендуем">
-          <div className="recommendation-heading">
-            <div>
-              <span className="eyebrow">Мы рекомендуем</span>
-              <h3>Лучшие варианты из наличия</h3>
-            </div>
-            {recommendedTobaccos.length > 0 && <span>{recommendedTobaccos.length} вариантов</span>}
-          </div>
-
-          {selectedCategoryIds.length === 0 && selectedStrength === 'any' ? (
-            <div className="soft-hint">Выберите один или несколько вкусов, и мы подберем варианты.</div>
-          ) : recommendedTobaccos.length === 0 ? (
-            <div className="soft-hint">Точных совпадений мало, вот ближайшие варианты появятся после обновления наличия.</div>
-          ) : (
-            <>
-              {exactRecommendationCount < 3 && (
-                <div className="soft-hint">Точных совпадений мало, вот ближайшие варианты.</div>
-              )}
-              {renderCards(recommendedTobaccos, 'recommendation-grid')}
-            </>
-          )}
-        </section>
-
-        <section className="choice-section" id="guest-order-details" aria-label="Укажите стол">
-          <div className="choice-heading">
-            <div>
-              <span className="eyebrow">Шаг 3</span>
-              <h3>Укажите стол</h3>
-            </div>
-            {choiceItems.length > 0 && (
-              <button className="clear-taste-button" type="button" onClick={() => setChoiceItems([])}>
-                <Trash2 size={16} />
-                Очистить
-              </button>
-            )}
-          </div>
-
-          <label className="guest-table-field">
-            <span>Номер стола</span>
-            <input
-              inputMode="numeric"
-              type="text"
-              value={tableNumber}
-              onChange={(event) => setTableNumber(event.target.value)}
-              placeholder="Например: 5"
-            />
-          </label>
-
-          <div className="choice-format-summary">
-            <span>Выбранная подача</span>
-            <strong>
-              {selectedFormat
-                ? `${selectedFormat.format.title} — ${selectedFormat.variant.title}`
-                : 'Пока не выбран'}
-            </strong>
-            {selectedFormat && <small>{selectedFormat.variant.priceLabel}</small>}
-          </div>
-
-          {choiceItems.length === 0 ? (
-            <div className="choice-empty">Табаки не выбраны — подобрать с мастером</div>
-          ) : (
-            <>
-              <strong className="choice-list-title">Выбранные табаки</strong>
-              <div className="choice-list">
-                {choiceItems.map((item) => (
-                  <div className="choice-item" key={item.id}>
-                    <div>
-                      <span>{item.brand}</span>
-                      <strong>{item.name}</strong>
-                      <small>{item.taste}</small>
-                    </div>
-                    <button type="button" onClick={() => removeChoice(item.id)} aria-label={`Удалить ${item.name}`}>
-                      <X size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
 
           <section className="guest-details-section" aria-label="Контактные данные">
             <div className="guest-details-heading">
@@ -2062,16 +1987,41 @@ export default function App() {
             </p>
           </section>
 
-          <div className="choice-send-row">
-            <button className="ghost-button" type="button" onClick={prepareChoiceRequest}>
+          <div className="send-options">
+            <button className="primary-button" type="button" onClick={prepareChoiceRequest}>
               <Send size={18} />
               Проверить и отправить заказ
             </button>
           </div>
+
           <p className="send-note">
             Перед отправкой вы увидите весь заказ и сможете ещё раз его проверить.
           </p>
-          {guestOrderMessage && <div className="master-save-message" role="status">{guestOrderMessage}</div>}
+
+          {guestOrderMessage && <div className="prepared-request" role="status">{guestOrderMessage}</div>}
+        </section>
+
+        <section className="recommendation-section" aria-label="Мы рекомендуем">
+          <div className="recommendation-heading">
+            <div>
+              <span className="eyebrow">Мы рекомендуем</span>
+              <h3>Лучшие варианты из наличия</h3>
+            </div>
+            {recommendedTobaccos.length > 0 && <span>{recommendedTobaccos.length} вариантов</span>}
+          </div>
+
+          {selectedCategoryIds.length === 0 && selectedStrength === 'any' ? (
+            <div className="soft-hint">Выберите один или несколько вкусов, и мы подберем варианты.</div>
+          ) : recommendedTobaccos.length === 0 ? (
+            <div className="soft-hint">Точных совпадений мало, вот ближайшие варианты появятся после обновления наличия.</div>
+          ) : (
+            <>
+              {exactRecommendationCount < 3 && (
+                <div className="soft-hint">Точных совпадений мало, вот ближайшие варианты.</div>
+              )}
+              {renderCards(recommendedTobaccos, 'recommendation-grid')}
+            </>
+          )}
         </section>
 
         {auth.user && !auth.isStaff && (
