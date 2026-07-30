@@ -1928,18 +1928,6 @@ export default function App() {
             <small className="guest-comment-counter">{guestComment.length} / 1000</small>
           </label>
 
-          <div className="send-options">
-            <button className="primary-button" type="button" onClick={prepareChoiceRequest}>
-              <Send size={18} />
-              Отправить мой выбор
-            </button>
-          </div>
-
-          <p className="send-note">
-            Перед отправкой вы увидите весь заказ и сможете ещё раз его проверить.
-          </p>
-
-          {guestOrderMessage && <div className="prepared-request" role="status">{guestOrderMessage}</div>}
         </section>
 
         <section className="recommendation-section" aria-label="Мы рекомендуем">
@@ -1965,11 +1953,11 @@ export default function App() {
           )}
         </section>
 
-        <section className="choice-section" id="my-choice" aria-label="Мой выбор">
+        <section className="choice-section" id="guest-order-details" aria-label="Укажите стол">
           <div className="choice-heading">
             <div>
-              <span className="eyebrow">Показать мастеру</span>
-              <h3>Мой выбор</h3>
+              <span className="eyebrow">Шаг 3</span>
+              <h3>Укажите стол</h3>
             </div>
             {choiceItems.length > 0 && (
               <button className="clear-taste-button" type="button" onClick={() => setChoiceItems([])}>
@@ -1979,8 +1967,19 @@ export default function App() {
             )}
           </div>
 
+          <label className="guest-table-field">
+            <span>Номер стола</span>
+            <input
+              inputMode="numeric"
+              type="text"
+              value={tableNumber}
+              onChange={(event) => setTableNumber(event.target.value)}
+              placeholder="Например: 5"
+            />
+          </label>
+
           <div className="choice-format-summary">
-            <span>Формат кальяна</span>
+            <span>Выбранная подача</span>
             <strong>
               {selectedFormat
                 ? `${selectedFormat.format.title} — ${selectedFormat.variant.title}`
@@ -1990,22 +1989,25 @@ export default function App() {
           </div>
 
           {choiceItems.length === 0 ? (
-            <div className="choice-empty">Вы пока ничего не выбрали</div>
+            <div className="choice-empty">Табаки не выбраны — подобрать с мастером</div>
           ) : (
-            <div className="choice-list">
-              {choiceItems.map((item) => (
-                <div className="choice-item" key={item.id}>
-                  <div>
-                    <span>{item.brand}</span>
-                    <strong>{item.name}</strong>
-                    <small>{item.taste}</small>
+            <>
+              <strong className="choice-list-title">Выбранные табаки</strong>
+              <div className="choice-list">
+                {choiceItems.map((item) => (
+                  <div className="choice-item" key={item.id}>
+                    <div>
+                      <span>{item.brand}</span>
+                      <strong>{item.name}</strong>
+                      <small>{item.taste}</small>
+                    </div>
+                    <button type="button" onClick={() => removeChoice(item.id)} aria-label={`Удалить ${item.name}`}>
+                      <X size={18} />
+                    </button>
                   </div>
-                  <button type="button" onClick={() => removeChoice(item.id)} aria-label={`Удалить ${item.name}`}>
-                    <X size={18} />
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
 
           <section className="guest-details-section" aria-label="Контактные данные">
@@ -2054,16 +2056,6 @@ export default function App() {
                   autoComplete="off"
                 />
               </label>
-              <label className="guest-details-field">
-                <span>Номер стола</span>
-                <input
-                  inputMode="numeric"
-                  type="text"
-                  value={tableNumber}
-                  onChange={(event) => setTableNumber(event.target.value)}
-                  placeholder="Например: 5"
-                />
-              </label>
             </div>
             <p className="guest-details-note">
               Данные сохраняются на этом телефоне и используются только для вашего заказа.
@@ -2073,9 +2065,12 @@ export default function App() {
           <div className="choice-send-row">
             <button className="ghost-button" type="button" onClick={prepareChoiceRequest}>
               <Send size={18} />
-              Отправить мой выбор
+              Проверить и отправить заказ
             </button>
           </div>
+          <p className="send-note">
+            Перед отправкой вы увидите весь заказ и сможете ещё раз его проверить.
+          </p>
           {guestOrderMessage && <div className="master-save-message" role="status">{guestOrderMessage}</div>}
         </section>
 

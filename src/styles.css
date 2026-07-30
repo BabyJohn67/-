@@ -895,6 +895,37 @@ h2 {
   background: rgba(21, 18, 13, 0.72);
 }
 
+.guest-table-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--gold-soft);
+  font-weight: 900;
+}
+
+.guest-table-field input {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(242, 207, 131, 0.34);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #fff6e4;
+  background: rgba(255, 255, 255, 0.06);
+  outline: 0;
+  font-size: 18px;
+}
+
+.guest-table-field input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(217, 170, 69, 0.12);
+}
+
+.choice-list-title {
+  display: block;
+  margin: 14px 0 10px;
+  color: var(--gold-soft);
+}
+
 .recommendation-heading,
 .guest-request-heading,
 .choice-heading,
