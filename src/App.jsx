@@ -1525,7 +1525,7 @@ export default function App() {
               <div><span>Крепость</span><strong>{preparedRequest.strength}</strong></div>
             </div>
 
-            {preparedRequest.items.length > 0 ? (
+            {preparedRequest.items.length > 0 && (
               <div className="guest-order-preview-items">
                 {preparedRequest.items.map((item) => (
                   <div key={item.id}>
@@ -1534,8 +1534,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="soft-hint">Табаки не выбраны — подобрать с мастером</div>
             )}
 
             {preparedRequest.comment && (
