@@ -668,10 +668,12 @@ export default function App() {
     );
   }
 
-  function addChoice(item) {
+  function toggleChoice(item) {
     if (item.quantity <= 0) return;
     setChoiceItems((current) => {
-      if (current.some((choice) => choice.id === item.id)) return current;
+      if (current.some((choice) => choice.id === item.id)) {
+        return current.filter((choice) => choice.id !== item.id);
+      }
       return [
         ...current,
         {
@@ -1299,7 +1301,7 @@ export default function App() {
           <TobaccoCard
             key={item.id}
             item={item}
-            onAddChoice={addChoice}
+            onToggleChoice={toggleChoice}
             isChosen={choiceIds.has(item.id)}
             selectedCategoryIds={selectedCategoryIds}
           />

@@ -3,7 +3,7 @@ import { getBrand, getGuestStockStatus, getTasteMatches } from '../utils/tobacco
 
 export default function TobaccoCard({
   item,
-  onAddChoice,
+  onToggleChoice,
   isChosen,
   selectedCategoryIds = []
 }) {
@@ -34,13 +34,13 @@ export default function TobaccoCard({
       <button
         className={`want-button${isChosen ? ' is-chosen' : ''}`}
         aria-pressed={isChosen}
+        aria-label={isChosen ? 'Удалить табак из выбора' : 'Добавить табак в выбор'}
         disabled={item.quantity <= 0}
+        title={isChosen ? 'Удалить табак из выбора' : 'Добавить табак в выбор'}
         type="button"
-        onClick={() => {
-          if (!isChosen) onAddChoice(item);
-        }}
+        onClick={() => onToggleChoice(item)}
       >
-        <Heart size={18} />
+        <Heart aria-hidden="true" fill={isChosen ? 'currentColor' : 'none'} size={18} />
         {isChosen ? 'В моем выборе' : 'Хочу это'}
       </button>
     </article>
