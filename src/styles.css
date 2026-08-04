@@ -1367,6 +1367,10 @@ h2 {
   font-weight: 900;
 }
 
+.want-button.is-chosen {
+  box-shadow: inset 0 0 0 2px rgba(23, 16, 7, 0.24);
+}
+
 .want-button:disabled {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.08);

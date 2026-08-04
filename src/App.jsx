@@ -1516,7 +1516,6 @@ export default function App() {
                 {preparedRequest.items.map((item) => (
                   <div key={item.id}>
                     <span><strong>{item.brand} {item.name}</strong><small>{item.taste}</small></span>
-                    <strong>{item.percent}%</strong>
                   </div>
                 ))}
               </div>

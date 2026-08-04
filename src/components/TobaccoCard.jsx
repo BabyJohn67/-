@@ -32,10 +32,13 @@ export default function TobaccoCard({
       )}
 
       <button
-        className="want-button"
+        className={`want-button${isChosen ? ' is-chosen' : ''}`}
+        aria-pressed={isChosen}
         disabled={item.quantity <= 0}
         type="button"
-        onClick={() => onAddChoice(item)}
+        onClick={() => {
+          if (!isChosen) onAddChoice(item);
+        }}
       >
         <Heart size={18} />
         {isChosen ? 'В моем выборе' : 'Хочу это'}
