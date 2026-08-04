@@ -139,15 +139,6 @@ function isFormatAllowedForHookah(formatId, hookahId) {
   return unit.allowedFormatIds.includes(formatId);
 }
 
-function loadStoredFormat() {
-  try {
-    const storedFormat = localStorage.getItem(FORMAT_STORAGE_KEY);
-    return findFormatSelection(storedFormat)?.variant.id || '';
-  } catch {
-    return '';
-  }
-}
-
 function loadStoredTableNumber() {
   try {
     const tableFromUrl = new URLSearchParams(window.location.search).get('table');
@@ -216,7 +207,7 @@ export default function App() {
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [selectedStrength, setSelectedStrength] = useState('any');
-  const [selectedFormatId, setSelectedFormatId] = useState(() => loadStoredFormat());
+  const [selectedFormatId, setSelectedFormatId] = useState('');
   const [expandedFormatId, setExpandedFormatId] = useState('');
   const [failedFormatImages, setFailedFormatImages] = useState({});
   const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
@@ -458,13 +449,8 @@ export default function App() {
   }, [choiceItems]);
 
   useEffect(() => {
-    if (selectedFormatId) {
-      localStorage.setItem(FORMAT_STORAGE_KEY, selectedFormatId);
-      return;
-    }
-
     localStorage.removeItem(FORMAT_STORAGE_KEY);
-  }, [selectedFormatId]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(TABLE_STORAGE_KEY, tableNumber);
