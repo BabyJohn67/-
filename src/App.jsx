@@ -105,15 +105,6 @@ function createInventoryRequestId() {
 }
 
 
-function loadStoredChoice() {
-  try {
-    const raw = localStorage.getItem(CHOICE_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
 function findFormatSelection(selectionId) {
   const normalizedSelectionId = LEGACY_FORMAT_VARIANT_IDS[selectionId] || selectionId;
 
@@ -139,11 +130,10 @@ function isFormatAllowedForHookah(formatId, hookahId) {
   return unit.allowedFormatIds.includes(formatId);
 }
 
-function loadStoredTableNumber() {
+function loadInitialTableNumber() {
   try {
     const tableFromUrl = new URLSearchParams(window.location.search).get('table');
-    if (tableFromUrl) return tableFromUrl.trim();
-    return localStorage.getItem(TABLE_STORAGE_KEY) || '';
+    return tableFromUrl?.trim() || '';
   } catch {
     return '';
   }
@@ -210,7 +200,7 @@ export default function App() {
   const [selectedFormatId, setSelectedFormatId] = useState('');
   const [expandedFormatId, setExpandedFormatId] = useState('');
   const [failedFormatImages, setFailedFormatImages] = useState({});
-  const [choiceItems, setChoiceItems] = useState(() => loadStoredChoice());
+  const [choiceItems, setChoiceItems] = useState([]);
   const [guestComment, setGuestComment] = useState('');
   const [preparedRequest, setPreparedRequest] = useState(null);
   const [guestOrderMessage, setGuestOrderMessage] = useState('');
@@ -218,7 +208,7 @@ export default function App() {
   const [myGuestOrders, setMyGuestOrders] = useState([]);
   const [isMyOrdersLoading, setIsMyOrdersLoading] = useState(false);
   const [myOrdersView, setMyOrdersView] = useState('active');
-  const [tableNumber, setTableNumber] = useState(() => loadStoredTableNumber());
+  const [tableNumber, setTableNumber] = useState(() => loadInitialTableNumber());
   const [guestId] = useState(() => loadOrCreateGuestId());
   const [callMasterNotice, setCallMasterNotice] = useState('');
   const [lastCallMasterEvent, setLastCallMasterEvent] = useState(null);
@@ -445,16 +435,10 @@ export default function App() {
   }, [hookahPageId]);
 
   useEffect(() => {
-    localStorage.setItem(CHOICE_STORAGE_KEY, JSON.stringify(choiceItems));
-  }, [choiceItems]);
-
-  useEffect(() => {
+    localStorage.removeItem(CHOICE_STORAGE_KEY);
     localStorage.removeItem(FORMAT_STORAGE_KEY);
+    localStorage.removeItem(TABLE_STORAGE_KEY);
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(TABLE_STORAGE_KEY, tableNumber);
-  }, [tableNumber]);
 
   useEffect(() => {
     if (!isMaster) return;
